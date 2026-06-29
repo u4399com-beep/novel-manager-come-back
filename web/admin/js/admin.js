@@ -70,16 +70,11 @@ const MainLayout = {
   template: `
   <div style="display:flex;width:100%">
     <div class="sidebar" :class="{collapsed:collapsed}">
-      <div class="logo" @click="collapsed=!collapsed"><span>📚</span><span v-show="!collapsed"> 归来CMS</span></div>
-      <el-menu :default-active="route.path" router :collapse="collapsed" background-color="transparent" text-color="#c0c4cc" active-text-color="#fff">
-        <el-menu-item index="/dashboard"><el-icon><Odometer/></el-icon><span>控制台</span></el-menu-item>
-        <el-menu-item index="/novels"><el-icon><Reading/></el-icon><span>小说管理</span></el-menu-item>
-        <el-menu-item index="/categories"><el-icon><Collection/></el-icon><span>分类管理</span></el-menu-item>
-        <el-menu-item index="/crawler"><el-icon><Download/></el-icon><span>采集任务</span></el-menu-item>
-        <el-menu-item index="/sites"><el-icon><Monitor/></el-icon><span>站点管理</span></el-menu-item>
-        <el-menu-item index="/link-rings"><el-icon><Connection/></el-icon><span>链轮管理</span></el-menu-item>
-        <el-menu-item index="/cache"><el-icon><Setting/></el-icon><span>缓存运维</span></el-menu-item>
-      </el-menu>
+      <a class="logo" @click="collapsed=!collapsed">📚<span v-show="!collapsed"> 归来CMS</span></a>
+      <a v-for="m in menu" :key="m.path" :href="'#'+m.path" class="menu-item" :class="{active:route.path===m.path}" @click="navigate(m.path)">
+        <span class="menu-icon">{{m.icon}}</span>
+        <span class="menu-label">{{m.label}}</span>
+      </a>
     </div>
     <div class="main-area" :class="{expanded:collapsed}">
       <div class="header">
@@ -90,10 +85,20 @@ const MainLayout = {
     </div>
   </div>`,
   setup() {
-    const route = useRoute(); const collapsed = ref(false);
+    const route = useRoute(); const router = useRouter(); const collapsed = ref(false);
     const pageTitle = computed(() => route.meta.title || '');
     const user = localStorage.getItem('auser') || '';
-    return { route, pageTitle, user, collapsed, logout };
+    const menu = [
+      { path: '/dashboard', label: '控制台', icon: '📊' },
+      { path: '/novels', label: '小说管理', icon: '📚' },
+      { path: '/categories', label: '分类管理', icon: '🏷️' },
+      { path: '/crawler', label: '采集任务', icon: '🕷️' },
+      { path: '/sites', label: '站点管理', icon: '🌐' },
+      { path: '/link-rings', label: '链轮管理', icon: '🔗' },
+      { path: '/cache', label: '缓存运维', icon: '🗄️' },
+    ];
+    const navigate = (path) => router.push(path);
+    return { route, pageTitle, user, collapsed, menu, navigate, logout };
   }
 };
 
