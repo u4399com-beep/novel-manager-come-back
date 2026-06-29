@@ -183,8 +183,19 @@ a:hover{color:var(--primary)}
 .chapter-list li a{font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chapter-nav-bottom{margin-top:20px;text-align:center}
 
+/* Reading Toolbar */
+.reader-toolbar{position:sticky;top:60px;z-index:50;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:0;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.toolbar-inner{max-width:780px;margin:0 auto;display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 16px;flex-wrap:wrap}
+.toolbar-group{display:flex;align-items:center;gap:2px}
+.tb-btn{display:inline-flex;align-items:center;justify-content:center;padding:5px 10px;border:1.5px solid transparent;border-radius:6px;background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer;transition:all .15s;white-space:nowrap;text-decoration:none;min-width:32px}
+.tb-btn:hover{background:var(--bg);color:var(--text);border-color:var(--border)}
+.tb-btn.active,.tb-theme.active{background:var(--primary-light);color:var(--primary);border-color:var(--primary)}
+.tb-fontsize{font-size:12px;color:var(--text-secondary);min-width:20px;text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
+@media(max-width:600px){.toolbar-inner{gap:0;padding:4px 8px}.tb-btn{padding:4px 7px;font-size:11px}}
+
 /* Chapter Reader */
-.chapter-reader{max-width:780px;margin:20px auto;background:var(--card-bg);padding:40px 50px;border-radius:var(--radius);box-shadow:var(--shadow)}
+.chapter-reader{max-width:780px;margin: 0 auto 40px;background:var(--card-bg);padding:32px 50px 40px;border-radius:0 0 var(--radius) var(--radius);box-shadow:none;border:1px solid var(--border);border-top:none}
+.reader-wide .chapter-reader{max-width:960px}
 .chapter-nav{display:flex;justify-content:space-between;margin-bottom:24px}
 .chapter-reader h1{font-size:22px;text-align:center;margin-bottom:8px}
 .chapter-info{text-align:center;color:var(--text-secondary);font-size:13px;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid var(--border)}
@@ -193,6 +204,24 @@ a:hover{color:var(--primary)}
 
 /* Search */
 .no-results{text-align:center;padding:60px 0;color:var(--text-light);font-size:16px}
+
+/* Reading Themes */
+.chapter-page{transition:background .3s}
+.theme-white{--reader-bg:#fff;--reader-text:#333}
+.theme-warm{background:#f5f0e8}.theme-warm .chapter-reader{background:#fdfaf4;border-color:#e8dfd0}
+.theme-warm .reader-toolbar{background:rgba(253,250,244,.95);border-color:#e8dfd0}
+.theme-green{background:#e8f0e3}.theme-green .chapter-reader{background:#f2f8ee;border-color:#d0dcc8}
+.theme-green .reader-toolbar{background:rgba(242,248,238,.95);border-color:#d0dcc8}
+.theme-dark{background:#1a1a2e;color:#c8c8d0}
+.theme-dark .reader-toolbar{background:rgba(30,30,50,.95);border-color:#333;backdrop-filter:blur(8px)}
+.theme-dark .reader-toolbar .tb-btn{color:#999}.theme-dark .reader-toolbar .tb-btn:hover{background:#333;color:#ddd}
+.theme-dark .reader-toolbar .tb-btn.active{background:rgba(91,106,240,.2);color:var(--primary)}
+.theme-dark .chapter-reader{background:#1e1e32;border-color:#333;box-shadow:none}
+.theme-dark .chapter-reader h1,.theme-dark .chapter-reader .chapter-content{color:#d0d0d8}
+.theme-dark .chapter-nav .btn{background:#2a2a40;border-color:#444;color:#aaa}
+.theme-dark .site-header{background:rgba(30,30,50,.9);border-color:#333}
+.theme-dark .site-header a{color:#bbb}
+.theme-dark .site-footer{background:#12121e;color:#666}
 
 /* Status Tags */
 .status-tag.ongoing{color:#059669}

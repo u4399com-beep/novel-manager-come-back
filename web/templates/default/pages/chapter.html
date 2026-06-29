@@ -6,7 +6,7 @@
 <title>{{.Title}}</title>
 <link rel="stylesheet" href="/static/css/site.css">
 </head>
-<body>
+<body class="chapter-page">
 <header class="site-header">
   <div class="container">
     <a href="/" class="logo">{{.SiteName}}</a>
@@ -14,7 +14,34 @@
   </div>
 </header>
 
-<main class="container chapter-reader">
+<!-- Reading Toolbar -->
+<div class="reader-toolbar" id="toolbar">
+  <div class="toolbar-inner">
+    <div class="toolbar-group">
+      <a href="/novel/{{.Novel.ID}}" class="tb-btn" title="返回目录">📖 目录</a>
+    </div>
+    <div class="toolbar-group">
+      <button class="tb-btn" onclick="changeFont(-1)" title="缩小字体">A⁻</button>
+      <span class="tb-fontsize" id="fontsize-label">18</span>
+      <button class="tb-btn" onclick="changeFont(1)" title="放大字体">A⁺</button>
+    </div>
+    <div class="toolbar-group">
+      <button class="tb-btn tb-theme active" data-theme="white" onclick="setTheme('white')" title="白色背景">☀️</button>
+      <button class="tb-btn tb-theme" data-theme="warm" onclick="setTheme('warm')" title="护眼暖色">🌙</button>
+      <button class="tb-btn tb-theme" data-theme="green" onclick="setTheme('green')" title="绿色护眼">🌿</button>
+      <button class="tb-btn tb-theme" data-theme="dark" onclick="setTheme('dark')" title="夜间模式">🌑</button>
+    </div>
+    <div class="toolbar-group">
+      <button class="tb-btn" onclick="toggleWidth()" title="切换宽窄">↔️</button>
+    </div>
+    <div class="toolbar-group">
+      {{if .PrevID}}<a href="/chapter/{{.PrevID}}" class="tb-btn" title="上一章">◀</a>{{end}}
+      {{if .NextID}}<a href="/chapter/{{.NextID}}" class="tb-btn" title="下一章">▶</a>{{end}}
+    </div>
+  </div>
+</div>
+
+<main class="container chapter-reader" id="chapter-reader">
   <div class="chapter-nav top-nav">
     {{if .PrevID}}<a href="/chapter/{{.PrevID}}" class="btn">← {{.PrevT}}</a>{{end}}
     <a href="/novel/{{.Novel.ID}}">目录</a>
@@ -24,7 +51,7 @@
   <h1>{{.Chapter.Title}}</h1>
   <p class="chapter-info">作者: {{.Novel.Author}} | 字数: {{.Chapter.WordCount}}</p>
 
-  <div class="chapter-content">
+  <div class="chapter-content" id="chapter-content">
     {{range splitParagraphs .Chapter.Content}}
     <p>{{.}}</p>
     {{end}}
@@ -40,5 +67,34 @@
 <footer class="site-footer">
   <div class="container"><p>&copy; 2026 归来小说CMS</p></div>
 </footer>
+
+<script>
+// Reading toolbar logic
+var fontSize = 18;
+var theme = localStorage.getItem('reader-theme') || 'white';
+var wide = localStorage.getItem('reader-wide') === '1';
+
+function applySettings() {
+  var el = document.getElementById('chapter-content');
+  el.style.fontSize = fontSize + 'px';
+  document.getElementById('fontsize-label').textContent = fontSize;
+  document.body.className = 'chapter-page theme-' + theme + (wide ? ' reader-wide' : '');
+  document.querySelectorAll('.tb-theme').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.theme === theme);
+  });
+  localStorage.setItem('reader-theme', theme);
+  localStorage.setItem('reader-wide', wide ? '1' : '0');
+  localStorage.setItem('reader-fontsize', fontSize);
+}
+
+function changeFont(d) { fontSize = Math.max(14, Math.min(28, fontSize + d * 2)); applySettings(); }
+function setTheme(t) { theme = t; applySettings(); }
+function toggleWidth() { wide = !wide; applySettings(); }
+
+// Restore saved settings
+var savedSize = parseInt(localStorage.getItem('reader-fontsize'));
+if (savedSize >= 14 && savedSize <= 28) fontSize = savedSize;
+applySettings();
+</script>
 </body>
 </html>{{end}}
