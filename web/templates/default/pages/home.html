@@ -69,12 +69,13 @@
       <section class="home-section">
         <div class="section-header">
           <h2>🔥 最新更新</h2>
-          <div class="section-tabs">
-            <a href="/novels" class="more-link">全部 →</a>
-          </div>
+          <a href="/novels" class="more-link">全部 →</a>
         </div>
+
+        <!-- Top 12 Cover Cards (2 rows × 6) -->
+        {{if .GridCards}}
         <div class="update-grid">
-          {{range .Novels}}
+          {{range .GridCards}}
           <a href="/novel/{{.ID}}" class="update-card">
             <div class="update-cover">
               <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="lazy">
@@ -86,17 +87,25 @@
             <div class="update-info">
               <h3 title="{{.Title}}">{{.Title}}</h3>
               <p class="update-author">{{or .Author "未知作者"}}</p>
-              <p class="update-desc">{{truncate .Description 60}}</p>
             </div>
           </a>
           {{end}}
         </div>
-        {{if gt .Pages 1}}
-        <div class="pagination">
-          {{range seq .Pages}}
-          <a href="/?page={{.}}" class="page-btn {{if eq . $.Page}}active{{end}}">{{.}}</a>
+        {{end}}
+
+        <!-- Latest 30 Numbered List -->
+        {{if .LatestList}}
+        <ol class="latest-numbered-list">
+          {{range $i, $n := .LatestList}}
+          <li>
+            <span class="list-num">{{add $i 1}}</span>
+            <a href="/novel/{{.ID}}" class="list-title">{{.Title}}</a>
+            <span class="list-author">{{or .Author "未知"}}</span>
+            <span class="list-chapters">{{.TotalChapters}}章</span>
+            <span class="list-status status-{{.Status}}">{{statusLabel .Status}}</span>
+          </li>
           {{end}}
-        </div>
+        </ol>
         {{end}}
       </section>
     </div>

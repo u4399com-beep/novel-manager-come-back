@@ -96,19 +96,21 @@ func (r *Router) Register(mux *http.ServeMux) {
 
 func (r *Router) handleHome(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path != "/" {
-		http.NotFound(w, req)
-		return
+		http.NotFound(w, req); return
 	}
-	page, _ := strconv.Atoi(req.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
-	}
-	size := 24
 
-	var novels []models.Novel
-	db := database.DB.Preload("Categories").Order("updated_at DESC")
-	db = db.Offset((page - 1) * size).Limit(size)
-	db.Find(&novels)
+	// Fetch 42 latest novels: 12 for grid cards + 30 for numbered list
+	const homeFetchCount = 42
+	var homeNovels []models.Novel
+	database.DB.Preload("Categories").Order("updated_at DESC").Limit(homeFetchCount).Find(&homeNovels)
+
+	var gridCards, latestList []models.Novel
+	if len(homeNovels) > 12 {
+		gridCards = homeNovels[:12]
+		latestList = homeNovels[12:]
+	} else {
+		gridCards = homeNovels
+	}
 
 	var total int64
 	database.DB.Model(&models.Novel{}).Count(&total)
@@ -121,12 +123,12 @@ func (r *Router) handleHome(w http.ResponseWriter, req *http.Request) {
 
 	r.render(w, "home.html", map[string]interface{}{
 		"Title":      "归来小说CMS - 首页",
-		"Novels":     novels,
+		"GridCards":  gridCards,
+		"LatestList": latestList,
 		"Ranking":    ranking,
 		"Featured":   safeSlice(ranking, 5),
 		"Categories": categories,
-		"Page":       page, "Total": total,
-		"Pages": pagesFromTotal(total, size),
+		"Total":      total,
 	})
 }
 
