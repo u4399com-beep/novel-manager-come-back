@@ -61,8 +61,12 @@ func (r *Router) handleCategoryByID(w http.ResponseWriter, req *http.Request) {
 			writeError(w, http.StatusInternalServerError, "update failed")
 			return
 		}
+		// Re-fetch and handle potential error
 		var cat models.Category
-		database.DB.First(&cat, idStr)
+		if err := database.DB.First(&cat, idStr).Error; err != nil {
+			writeError(w, http.StatusNotFound, "category not found after update")
+			return
+		}
 		writeOK(w, cat)
 	case http.MethodDelete:
 		if err := database.DB.Delete(&models.Category{}, idStr).Error; err != nil {

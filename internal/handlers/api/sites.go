@@ -57,7 +57,10 @@ func (r *Router) handleSiteByID(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		var site models.Site
-		database.DB.First(&site, "id = ?", siteID)
+		if err := database.DB.First(&site, "id = ?", siteID).Error; err != nil {
+			writeError(w, http.StatusNotFound, "site not found after update")
+			return
+		}
 		writeOK(w, site)
 	case http.MethodDelete:
 		if err := database.DB.Delete(&models.Site{}, "id = ?", siteID).Error; err != nil {

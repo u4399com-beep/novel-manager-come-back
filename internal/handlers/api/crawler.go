@@ -10,15 +10,15 @@ import (
 	"github.com/u4399com-beep/novel-manager-come-back/internal/models"
 )
 
-// ── Sources ──────────────────────────────────────────────────────────────────
-
 func (r *Router) handleSources(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "GET required")
+		return
+	}
 	writeOK(w, []map[string]string{
 		{"source_name": "23qb", "base_url": "https://www.23qb.net", "description": "铅笔小说 (23qb.net)"},
 	})
 }
-
-// ── Crawl trigger ────────────────────────────────────────────────────────────
 
 func (r *Router) handleCrawlTrigger(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
@@ -34,11 +34,14 @@ func (r *Router) handleCrawlTrigger(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
+	if body.NovelID == "" {
+		writeError(w, http.StatusBadRequest, "novel_id required")
+		return
+	}
 	if body.Mode == "" {
 		body.Mode = "direct"
 	}
 
-	// Verify novel exists
 	var novel models.Novel
 	if err := database.DB.First(&novel, "id = ?", body.NovelID).Error; err != nil {
 		writeError(w, http.StatusNotFound, "novel not found")
@@ -47,16 +50,18 @@ func (r *Router) handleCrawlTrigger(w http.ResponseWriter, req *http.Request) {
 
 	task := models.CrawlerTask{NovelID: body.NovelID, Status: "pending"}
 	if err := database.DB.Create(&task).Error; err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
 	writeJSON(w, http.StatusAccepted, task)
 }
 
-// ── Tasks list ───────────────────────────────────────────────────────────────
-
 func (r *Router) handleCrawlTasks(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "GET required")
+		return
+	}
 	q := req.URL.Query()
 	page, _ := strconv.Atoi(q.Get("page"))
 	if page < 1 {
@@ -79,23 +84,19 @@ func (r *Router) handleCrawlTasks(w http.ResponseWriter, req *http.Request) {
 	db.Count(&total)
 	db.Order("created_at DESC").Offset((page - 1) * size).Limit(size).Find(&tasks)
 
-	pages := 0
-	if total > 0 {
-		pages = int(total) / size
-		if int(total)%size > 0 {
-			pages++
-		}
-	}
+	pages := calcPages(total, int64(size))
 	writeOK(w, map[string]interface{}{
 		"items": tasks, "total": total, "page": page, "size": size, "pages": pages,
 	})
 }
 
 func (r *Router) handleCrawlTaskByID(w http.ResponseWriter, req *http.Request) {
-	taskID := strings.TrimPrefix(req.URL.Path, r.cfg.APIPrefix+"/crawler/tasks/")
-	// Strip any trailing path
-	if idx := strings.Index(taskID, "/"); idx != -1 {
-		taskID = taskID[:idx]
+	path := strings.TrimPrefix(req.URL.Path, r.cfg.APIPrefix+"/crawler/tasks/")
+	parts := strings.SplitN(path, "/", 2)
+	taskID := parts[0]
+	action := ""
+	if len(parts) > 1 {
+		action = parts[1]
 	}
 
 	var task models.CrawlerTask
@@ -107,42 +108,68 @@ func (r *Router) handleCrawlTaskByID(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodGet:
 		writeOK(w, task)
+
 	case http.MethodDelete:
 		if task.Status == "running" {
 			writeError(w, http.StatusConflict, "cannot delete running task")
 			return
 		}
-		database.DB.Delete(&task)
+		if err := database.DB.Delete(&task).Error; err != nil {
+			writeError(w, http.StatusInternalServerError, "delete failed")
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
+
 	case http.MethodPost:
-		// task actions: /tasks/{id}/start, /tasks/{id}/stop, /tasks/{id}/retry
-		action := strings.TrimPrefix(req.URL.Path, r.cfg.APIPrefix+"/crawler/tasks/"+taskID+"/")
 		switch action {
 		case "start":
+			if task.Status == "running" {
+				writeError(w, http.StatusConflict, "task already running")
+				return
+			}
+			if err := database.DB.Model(&task).Updates(map[string]interface{}{
+				"status": "running",
+			}).Error; err != nil {
+				writeError(w, http.StatusInternalServerError, "start failed")
+				return
+			}
 			task.Status = "running"
-			database.DB.Save(&task)
 			writeJSON(w, http.StatusAccepted, task)
+
 		case "stop":
+			if err := database.DB.Model(&task).Updates(map[string]interface{}{
+				"status": "failed", "error_message": "manually stopped",
+			}).Error; err != nil {
+				writeError(w, http.StatusInternalServerError, "stop failed")
+				return
+			}
 			task.Status = "failed"
-			task.ErrorMessage.Scan("manually stopped")
-			database.DB.Save(&task)
 			writeJSON(w, http.StatusAccepted, task)
+
 		case "retry":
+			if err := database.DB.Model(&task).Updates(map[string]interface{}{
+				"status": "pending", "error_message": nil,
+			}).Error; err != nil {
+				writeError(w, http.StatusInternalServerError, "retry failed")
+				return
+			}
 			task.Status = "pending"
-			task.ErrorMessage.Valid = false
-			database.DB.Save(&task)
 			writeJSON(w, http.StatusAccepted, task)
+
 		default:
-			writeError(w, http.StatusNotFound, "unknown action")
+			writeError(w, http.StatusNotFound, "unknown action: "+action)
 		}
+
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "GET/DELETE/POST required")
 	}
 }
 
-// ── Stats ────────────────────────────────────────────────────────────────────
-
 func (r *Router) handleCrawlStats(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "GET required")
+		return
+	}
 	var totalN, totalCh, totalTasks, pending int64
 	database.DB.Model(&models.Novel{}).Count(&totalN)
 	database.DB.Model(&models.Chapter{}).Count(&totalCh)
@@ -154,6 +181,16 @@ func (r *Router) handleCrawlStats(w http.ResponseWriter, req *http.Request) {
 		"chapters":      totalCh,
 		"tasks_total":   totalTasks,
 		"tasks_pending": pending,
-		"words_total":   0,
 	})
+}
+
+func calcPages(total, size int64) int {
+	if total == 0 {
+		return 0
+	}
+	p := int(total / size)
+	if total%size > 0 {
+		p++
+	}
+	return p
 }

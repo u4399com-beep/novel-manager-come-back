@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -196,11 +198,11 @@ func (r *Router) handleCover(w http.ResponseWriter, req *http.Request, novelID s
 		return
 	}
 
-	// Read full content
-	fullBuf := make([]byte, header.Size)
-	copy(fullBuf, buf[:n])
-	if int64(n) < header.Size {
-		file.Read(fullBuf[n:])
+	// Read full content safely using io.ReadAll
+	fullBuf, err := io.ReadAll(io.MultiReader(bytes.NewReader(buf[:n]), file))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to read cover")
+		return
 	}
 
 	url, err := services.SaveCoverImage(r.cfg, fullBuf, header.Filename)

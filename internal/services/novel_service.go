@@ -90,6 +90,15 @@ func GetNovel(id string) (*models.Novel, error) {
 }
 
 func CreateNovel(title, author, desc, sourceURL, sourceName, status string, categoryIDs []int) (*models.Novel, error) {
+	// Sanitize source URL: reject dangerous schemes
+	if sourceURL != "" {
+		lower := strings.ToLower(sourceURL)
+		if strings.HasPrefix(lower, "javascript:") || strings.HasPrefix(lower, "data:") ||
+			strings.HasPrefix(lower, "file:") || strings.HasPrefix(lower, "vbscript:") {
+			sourceURL = ""
+		}
+	}
+
 	novel := &models.Novel{
 		Title: title, Author: author, Description: desc,
 		SourceURL: sourceURL, SourceName: sourceName, Status: status,

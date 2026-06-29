@@ -24,8 +24,13 @@ func (r *Router) handleRegister(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	body.Username = strings.TrimSpace(body.Username)
+	body.Email = strings.TrimSpace(body.Email)
 	if body.Username == "" || body.Password == "" {
 		writeError(w, http.StatusBadRequest, "username and password required")
+		return
+	}
+	if body.Email != "" && !strings.Contains(body.Email, "@") {
+		writeError(w, http.StatusBadRequest, "invalid email format")
 		return
 	}
 

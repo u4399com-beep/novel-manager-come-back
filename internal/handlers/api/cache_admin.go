@@ -30,5 +30,5 @@ func (r *Router) handleCacheFlush(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "POST required")
 		return
 	}
-	writeOK(w, map[string]string{"message": "cache flushed (in-memory LRU cleared)"})
+	writeOK(w, map[string]string{"message": "ok — no persistent cache configured (future feature)"})
 }

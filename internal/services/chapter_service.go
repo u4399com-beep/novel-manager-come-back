@@ -77,7 +77,7 @@ func CreateChapter(novelID, title, content, sourceURL string, sortOrder int, isP
 	if novelID == "" || utf8.RuneCountInString(novelID) < 2 {
 		return nil, fmt.Errorf("invalid novel_id")
 	}
-	if sortOrder <= 0 {
+	if sortOrder == 0 {
 		var maxOrder int
 		database.DB.Model(&models.Chapter{}).
 			Where("novel_id = ?", novelID).
@@ -241,7 +241,14 @@ func ReorderChapters(novelID string, orders map[string]int) error {
 
 // ── Content file store ─────────────────────────────────────────────────────
 
-const contentDir = "data/content"
+// contentDir is resolved to absolute path at init for path traversal safety.
+var contentDir = func() string {
+	dir := "data/content"
+	if abs, err := filepath.Abs(dir); err == nil {
+		return abs
+	}
+	return dir
+}()
 
 func WriteContentFile(novelID, chapterID, content string) (string, error) {
 	if novelID == "" || chapterID == "" {
