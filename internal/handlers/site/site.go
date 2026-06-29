@@ -94,12 +94,20 @@ func (r *Router) Register(mux *http.ServeMux) {
 
 // ── Home ─────────────────────────────────────────────────────────────────────
 
+// homeNovelItem enriches a novel with its latest chapter and primary category.
+type homeNovelItem struct {
+	Novel           models.Novel
+	CategoryName    string
+	LatestChapter   string
+	LatestChapterID string
+	UpdatedMMDD     string
+}
+
 func (r *Router) handleHome(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path != "/" {
 		http.NotFound(w, req); return
 	}
 
-	// Fetch 42 latest novels: 12 for grid cards + 30 for numbered list
 	const homeFetchCount = 42
 	var homeNovels []models.Novel
 	database.DB.Preload("Categories").Order("updated_at DESC").Limit(homeFetchCount).Find(&homeNovels)
@@ -110,6 +118,53 @@ func (r *Router) handleHome(w http.ResponseWriter, req *http.Request) {
 		latestList = homeNovels[12:]
 	} else {
 		gridCards = homeNovels
+	}
+
+	// Batch fetch latest chapter titles + IDs for the list
+	type chInfo struct {
+		NovelID string
+		ID      string
+		Title   string
+	}
+	latestChMap := make(map[string]chInfo)
+	if len(latestList) > 0 {
+		ids := make([]string, len(latestList))
+		for i, n := range latestList {
+			ids[i] = n.ID
+		}
+		var rows []chInfo
+		database.DB.Raw(`
+			SELECT c.novel_id, c.id, c.title FROM chapters c
+			INNER JOIN (
+				SELECT novel_id, MAX(sort_order) AS max_so FROM chapters
+				WHERE novel_id IN (?)
+				GROUP BY novel_id
+			) latest ON c.novel_id = latest.novel_id AND c.sort_order = latest.max_so
+		`, ids).Scan(&rows)
+		for _, row := range rows {
+			latestChMap[row.NovelID] = row
+		}
+	}
+
+	// Build enriched items for template
+	listItems := make([]homeNovelItem, 0, len(latestList))
+	for _, n := range latestList {
+		catName := ""
+		if len(n.Categories) > 0 {
+			catName = n.Categories[0].Name
+		}
+		mmdd := ""
+		if !n.UpdatedAt.IsZero() {
+			mmdd = n.UpdatedAt.Format("01-02")
+		}
+		ch := latestChMap[n.ID]
+		listItems = append(listItems, homeNovelItem{
+			Novel:           n,
+			CategoryName:    catName,
+			LatestChapter:   ch.Title,
+			LatestChapterID: ch.ID,
+			UpdatedMMDD:     mmdd,
+		})
 	}
 
 	var total int64
@@ -124,7 +179,7 @@ func (r *Router) handleHome(w http.ResponseWriter, req *http.Request) {
 	r.render(w, "home.html", map[string]interface{}{
 		"Title":      "归来小说CMS - 首页",
 		"GridCards":  gridCards,
-		"LatestList": latestList,
+		"LatestList": listItems,
 		"Ranking":    ranking,
 		"Featured":   safeSlice(ranking, 5),
 		"Categories": categories,

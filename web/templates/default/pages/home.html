@@ -93,19 +93,32 @@
         </div>
         {{end}}
 
-        <!-- Latest 30 Numbered List -->
+        <!-- Latest 30 — 5-Column Table -->
         {{if .LatestList}}
-        <ol class="latest-numbered-list">
-          {{range $i, $n := .LatestList}}
-          <li>
-            <span class="list-num">{{add $i 1}}</span>
-            <a href="/novel/{{.ID}}" class="list-title">{{.Title}}</a>
-            <span class="list-author">{{or .Author "未知"}}</span>
-            <span class="list-chapters">{{.TotalChapters}}章</span>
-            <span class="list-status status-{{.Status}}">{{statusLabel .Status}}</span>
-          </li>
-          {{end}}
-        </ol>
+        <div class="latest-table-wrap">
+          <table class="latest-table">
+            <thead>
+              <tr>
+                <th class="col-cat">分类</th>
+                <th class="col-title">书名</th>
+                <th class="col-chapter">最新章节</th>
+                <th class="col-author">作者</th>
+                <th class="col-date">更新</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .LatestList}}
+              <tr>
+                <td class="col-cat">{{or .CategoryName "-"}}</td>
+                <td class="col-title"><a href="/novel/{{.Novel.ID}}">{{.Novel.Title}}</a></td>
+                <td class="col-chapter">{{if .LatestChapterID}}<a href="/chapter/{{.LatestChapterID}}">{{.LatestChapter}}</a>{{else}}-{{end}}</td>
+                <td class="col-author">{{or .Novel.Author "-"}}</td>
+                <td class="col-date">{{.UpdatedMMDD}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
         {{end}}
       </section>
     </div>

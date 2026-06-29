@@ -76,21 +76,21 @@ a:hover{color:var(--primary)}
 .section-tabs{display:flex;gap:8px}
 .section-tabs a{padding:6px 14px;border-radius:14px;font-size:12px;font-weight:500}
 
-/* Latest Numbered List */
-.latest-numbered-list{list-style:none;margin-top:20px;background:var(--card-bg);border-radius:var(--radius);padding:8px 0;box-shadow:var(--shadow)}
-.latest-numbered-list li{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid #f8f9fa;font-size:13px}
-.latest-numbered-list li:last-child{border-bottom:none}
-.list-num{width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--bg);font-size:11px;font-weight:600;color:var(--text-light);flex-shrink:0}
-.latest-numbered-list li:nth-child(-n+3) .list-num{background:var(--primary);color:#fff}
-.list-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;color:var(--text);min-width:0}
-.list-title:hover{color:var(--primary)}
-.list-author{color:var(--text-secondary);width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;text-align:right}
-.list-chapters{color:var(--text-light);width:45px;flex-shrink:0;text-align:right;font-size:12px}
-.list-status{font-size:11px;font-weight:500;width:48px;flex-shrink:0;text-align:center}
-.list-status.status-ongoing{color:#10b981}
-.list-status.status-completed{color:#6b7280}
-.list-status.status-hiatus{color:#f59e0b}
-@media(max-width:600px){.list-author,.list-chapters{display:none}}
+/* Latest 5-Column Table */
+.latest-table-wrap{margin-top:20px;background:var(--card-bg);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.latest-table{width:100%;border-collapse:collapse;font-size:13px}
+.latest-table thead{background:var(--bg)}
+.latest-table th{padding:10px 12px;text-align:left;font-weight:600;color:var(--text-secondary);font-size:12px;border-bottom:2px solid var(--border);white-space:nowrap}
+.latest-table td{padding:9px 12px;border-bottom:1px solid #f3f4f6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.latest-table tbody tr:hover{background:#fafbfc}
+.latest-table tbody tr:last-child td{border-bottom:none}
+.col-cat{width:60px;color:var(--text-light);font-size:12px}
+.col-title{max-width:200px}.col-title a{color:var(--text);font-weight:500}.col-title a:hover{color:var(--primary)}
+.col-chapter{max-width:220px}.col-chapter a{color:var(--text-secondary);font-size:12px}.col-chapter a:hover{color:var(--primary)}
+.col-author{width:80px;color:var(--text-secondary);font-size:12px}
+.col-date{width:56px;color:var(--text-light);font-size:12px;text-align:right}
+@media(max-width:768px){.col-chapter{display:none}}
+@media(max-width:480px){.col-cat{display:none}.col-date{display:none}}
 
 /* ── Old card styles (keep for backward compat) ── */
 .novel-grid-vertical{display:flex;flex-direction:column;gap:12px}
