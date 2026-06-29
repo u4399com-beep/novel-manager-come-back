@@ -158,17 +158,53 @@ func (r *Router) handleBookLibrary(w http.ResponseWriter, req *http.Request) {
 // ── Novel Detail ─────────────────────────────────────────────────────────────
 
 func (r *Router) handleNovelDetail(w http.ResponseWriter, req *http.Request) {
-	novelID := strings.TrimPrefix(req.URL.Path, "/novel/")
-	if novelID == "" {
-		http.NotFound(w, req)
-		return
+	path := strings.TrimPrefix(req.URL.Path, "/novel/")
+	if path == "" {
+		http.NotFound(w, req); return
 	}
+	parts := strings.SplitN(path, "/", 2)
+	novelID := parts[0]
+	isChapterList := len(parts) == 2 && parts[1] == "chapters"
 
 	var novel models.Novel
 	if err := database.DB.Preload("Categories").First(&novel, "id = ?", novelID).Error; err != nil {
-		http.NotFound(w, req)
+		http.NotFound(w, req); return
+	}
+
+	// Chapter list page
+	if isChapterList {
+		var allChapters []models.Chapter
+		database.DB.Where("novel_id = ?", novelID).Order("sort_order ASC").Find(&allChapters)
+
+		// Group by volume
+		type volGroup struct {
+			Title    string
+			Chapters []models.Chapter
+		}
+		var grouped []volGroup
+		currentVol := volGroup{Title: "正文"}
+		for _, ch := range allChapters {
+			vol := strings.TrimSpace(ch.Volume)
+			if vol != "" && currentVol.Title != vol {
+				if len(currentVol.Chapters) > 0 {
+					grouped = append(grouped, currentVol)
+				}
+				currentVol = volGroup{Title: vol}
+			}
+			currentVol.Chapters = append(currentVol.Chapters, ch)
+		}
+		grouped = append(grouped, currentVol)
+
+		r.render(w, "chapter_list.html", map[string]interface{}{
+			"Title":       novel.Title + " - 章节目录",
+			"Novel":       novel,
+			"AllChapters": allChapters,
+			"Grouped":     grouped,
+		})
 		return
 	}
+
+	// Novel detail page
 
 	var chapters []models.Chapter
 	database.DB.Where("novel_id = ?", novelID).Order("sort_order DESC").Limit(15).Find(&chapters)
