@@ -97,6 +97,23 @@ main{padding:24px 0;min-height:calc(100vh - 116px)}
 /* No results */
 .no-results{text-align:center;padding:60px 0;color:var(--text-secondary);font-size:16px}
 
+/* Chapter list header */
+.chapter-list-header{background:var(--card-bg);border-radius:var(--radius);padding:20px;margin-bottom:20px;box-shadow:var(--shadow)}
+.chapter-list-header h1{font-size:22px;margin-bottom:8px}
+.chapter-list-header p{color:var(--text-secondary);font-size:14px;margin-bottom:12px}
+.chapter-list-section{margin-top:0}
+.chapter-list-section h2{font-size:18px;border-left:3px solid var(--primary);padding-left:12px;margin-bottom:16px}
+.volume-group{margin-bottom:24px}
+.volume-title{font-size:15px;font-weight:600;padding:8px 12px;background:var(--bg);border-radius:var(--radius);margin-bottom:8px}
+.vol-count{font-weight:400;color:var(--text-secondary);font-size:13px}
+.chapter-list{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:2px}
+.chapter-list li{padding:8px 12px;border-bottom:1px solid #f0f0f0;counter-increment:ch}
+.chapter-list li::before{content:none}
+.chapter-list li a{font-size:14px;color:var(--text);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s}
+.chapter-list li a:hover{color:var(--primary)}
+.chapter-list li:nth-child(odd){background:#fafbfc}
+.chapter-nav-bottom{margin-top:24px;text-align:center}
+
 /* Responsive */
 @media(max-width:768px){
   .novel-detail .novel-header{flex-direction:column;align-items:center;text-align:center}

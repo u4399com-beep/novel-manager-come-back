@@ -10,21 +10,15 @@
 <header class="site-header">
   <div class="container">
     <a href="/" class="logo">{{.SiteName}}</a>
-    <nav><a href="/">首页</a><a href="/novels">书库</a></nav>
+    <nav><a href="/">首页</a><a href="/novels">书库</a><a href="/search">搜索</a></nav>
   </div>
 </header>
 
 <main class="container">
-  <div class="novel-detail">
-    <div class="novel-header">
-      <img src="{{or .Novel.CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Novel.Title}}" class="novel-cover" loading="lazy">
-      <div class="novel-meta-info">
-        <h1>{{.Novel.Title}}</h1>
-        <p class="author">作者: {{.Novel.Author}}</p>
-        <p class="status">状态: {{statusLabel .Novel.Status}} | 共 {{.Novel.TotalChapters}} 章</p>
-        <p class="desc">{{.Novel.Description}}</p>
-      </div>
-    </div>
+  <div class="chapter-list-header">
+    <h1>{{.Novel.Title}}</h1>
+    <p>作者: {{.Novel.Author}} | {{statusLabel .Novel.Status}} | 共 {{.Novel.TotalChapters}} 章</p>
+    <a href="/novel/{{.Novel.ID}}" class="btn">← 返回详情</a>
   </div>
 
   <section class="chapter-list-section">
@@ -32,25 +26,26 @@
     {{if .Grouped}}
       {{range .Grouped}}
       <div class="volume-group">
-        <h3 class="volume-title">{{.Title}}</h3>
-        <ul class="chapter-list">
+        <h3 class="volume-title">{{.Title}} <span class="vol-count">({{len .Chapters}}章)</span></h3>
+        <ol class="chapter-list">
           {{range .Chapters}}
           <li><a href="/chapter/{{.ID}}">{{.Title}}</a></li>
           {{end}}
-        </ul>
+        </ol>
       </div>
       {{end}}
     {{else}}
-      <ul class="chapter-list">
+      <ol class="chapter-list">
         {{range .AllChapters}}
         <li><a href="/chapter/{{.ID}}">{{.Title}}</a></li>
         {{end}}
-      </ul>
+      </ol>
     {{end}}
-    <div class="chapter-nav-bottom">
-      <a href="/novel/{{.Novel.ID}}" class="btn">← 返回详情</a>
-    </div>
   </section>
+
+  <div class="chapter-nav-bottom">
+    <a href="/novel/{{.Novel.ID}}" class="btn">← 返回详情</a>
+  </div>
 </main>
 
 <footer class="site-footer">
