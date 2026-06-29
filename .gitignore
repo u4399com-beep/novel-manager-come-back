@@ -41,3 +41,5 @@ coverage.html
 # Static uploads
 web/static/covers/*
 !web/static/covers/.gitkeep
+dev.db*
+*.db-journal

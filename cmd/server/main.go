@@ -60,12 +60,24 @@ func main() {
 	siteRouter := site.NewRouter(cfg)
 	siteRouter.Register(mux)
 
-	// Static files
+	// Static files (covers, CSS)
 	if fi, err := os.Stat(cfg.StaticDir); err == nil && fi.IsDir() {
 		fs := http.FileServer(http.Dir(cfg.StaticDir))
 		mux.Handle("/static/", http.StripPrefix("/static/", fs))
 	} else {
-		log.Printf("Static directory not found: %s (serving without static files)", cfg.StaticDir)
+		log.Printf("Static directory not found: %s", cfg.StaticDir)
+	}
+
+	// Admin panel (SPA served from web/admin/)
+	adminDir := "web/admin"
+	if fi, err := os.Stat(adminDir); err == nil && fi.IsDir() {
+		afs := http.FileServer(http.Dir(adminDir))
+		mux.Handle("/admin/", http.StripPrefix("/admin/", afs))
+		// Redirect /admin to /admin/
+		mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
+		})
+		log.Printf("Admin panel available at /admin/")
 	}
 
 	// Health check
