@@ -44,8 +44,7 @@
       <button class="tb-btn" onclick="toggleWidth()" title="切换宽窄">↔️</button>
     </div>
     <div class="toolbar-group">
-      {{if .PrevID}}<a href="/chapter/{{.PrevID}}" class="tb-btn" title="上一章">◀</a>{{end}}
-      {{if .NextID}}<a href="/chapter/{{.NextID}}" class="tb-btn" title="下一章">▶</a>{{end}}
+      <span class="tb-hint" title="键盘快捷键">⌨ ←→翻章 · 空格翻屏</span>
     </div>
   </div>
 </div>
@@ -116,6 +115,23 @@ var savedSize = parseInt(localStorage.getItem('reader-fontsize'));
 if (savedSize >= 14 && savedSize <= 28) fontSize = savedSize;
 fontFamily = localStorage.getItem('reader-font') || '';
 applySettings();
+
+// Keyboard navigation
+var prevUrl = '{{if .PrevID}}/chapter/{{.PrevID}}{{end}}';
+var nextUrl = '{{if .NextID}}/chapter/{{.NextID}}{{end}}';
+document.addEventListener('keydown', function(e) {
+  // Ignore if typing in input/textarea
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+  if (e.key === 'ArrowLeft' && prevUrl) {
+    window.location.href = prevUrl;
+  } else if (e.key === 'ArrowRight' && nextUrl) {
+    window.location.href = nextUrl;
+  } else if (e.key === ' ' || e.code === 'Space') {
+    e.preventDefault();
+    window.scrollBy({top: window.innerHeight * 0.85, behavior: 'smooth'});
+  }
+});
 </script>
 </body>
 </html>{{end}}
