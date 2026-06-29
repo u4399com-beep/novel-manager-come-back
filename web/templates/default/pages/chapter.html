@@ -26,6 +26,15 @@
       <button class="tb-btn" onclick="changeFont(1)" title="放大字体">A⁺</button>
     </div>
     <div class="toolbar-group">
+      <select class="tb-select" id="font-select" onchange="setFont(this.value)" title="字体选择">
+        <option value="">默认</option>
+        <option value="song">宋体</option>
+        <option value="hei">黑体</option>
+        <option value="kai">楷体</option>
+        <option value="yuan">圆体</option>
+      </select>
+    </div>
+    <div class="toolbar-group">
       <button class="tb-btn tb-theme active" data-theme="white" onclick="setTheme('white')" title="白色背景">☀️</button>
       <button class="tb-btn tb-theme" data-theme="warm" onclick="setTheme('warm')" title="护眼暖色">🌙</button>
       <button class="tb-btn tb-theme" data-theme="green" onclick="setTheme('green')" title="绿色护眼">🌿</button>
@@ -69,15 +78,25 @@
 </footer>
 
 <script>
-// Reading toolbar logic
 var fontSize = 18;
+var fontFamily = '';
 var theme = localStorage.getItem('reader-theme') || 'white';
 var wide = localStorage.getItem('reader-wide') === '1';
+
+var fontMap = {
+  '': '',
+  song: '"Songti SC", "宋体", "SimSun", serif',
+  hei: '"PingFang SC", "Microsoft YaHei", "黑体", "SimHei", sans-serif',
+  kai: '"Kaiti SC", "楷体", "KaiTi", serif',
+  yuan: '"Yuanti SC", "圆体", "STYuanti", sans-serif'
+};
 
 function applySettings() {
   var el = document.getElementById('chapter-content');
   el.style.fontSize = fontSize + 'px';
+  el.style.fontFamily = fontMap[fontFamily] || '';
   document.getElementById('fontsize-label').textContent = fontSize;
+  document.getElementById('font-select').value = fontFamily;
   document.body.className = 'chapter-page theme-' + theme + (wide ? ' reader-wide' : '');
   document.querySelectorAll('.tb-theme').forEach(function(b) {
     b.classList.toggle('active', b.dataset.theme === theme);
@@ -85,15 +104,17 @@ function applySettings() {
   localStorage.setItem('reader-theme', theme);
   localStorage.setItem('reader-wide', wide ? '1' : '0');
   localStorage.setItem('reader-fontsize', fontSize);
+  localStorage.setItem('reader-font', fontFamily);
 }
 
 function changeFont(d) { fontSize = Math.max(14, Math.min(28, fontSize + d * 2)); applySettings(); }
 function setTheme(t) { theme = t; applySettings(); }
+function setFont(f) { fontFamily = f; applySettings(); }
 function toggleWidth() { wide = !wide; applySettings(); }
 
-// Restore saved settings
 var savedSize = parseInt(localStorage.getItem('reader-fontsize'));
 if (savedSize >= 14 && savedSize <= 28) fontSize = savedSize;
+fontFamily = localStorage.getItem('reader-font') || '';
 applySettings();
 </script>
 </body>
