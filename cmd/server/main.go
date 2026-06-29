@@ -1,9 +1,9 @@
-// Package main is the entry point for the Come Back Novel CMS server.
+// Package main is the entry point for Come Back Novel CMS.
 package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -24,7 +24,10 @@ func main() {
 	log.Println("Come Back Novel CMS v2.0.0 starting...")
 
 	cfg := config.Load()
-	if cfg.SecretKey == "change-me-in-production-use-a-strong-random-key" {
+	if cfg.IsDevelopment {
+		log.Println("Running in DEVELOPMENT mode")
+	}
+	if cfg.SecretKey == "change-me-in-production-use-a-strong-random-key" && !cfg.IsDevelopment {
 		log.Println("WARNING: Using default SECRET_KEY — JWT tokens are forgeable!")
 	}
 
@@ -58,35 +61,35 @@ func main() {
 	siteRouter.Register(mux)
 
 	// Static files
-	staticDir := cfg.StaticDir
-	if fi, err := os.Stat(staticDir); err == nil && fi.IsDir() {
-		fs := http.FileServer(http.Dir(staticDir))
+	if fi, err := os.Stat(cfg.StaticDir); err == nil && fi.IsDir() {
+		fs := http.FileServer(http.Dir(cfg.StaticDir))
 		mux.Handle("/static/", http.StripPrefix("/static/", fs))
+	} else {
+		log.Printf("Static directory not found: %s (serving without static files)", cfg.StaticDir)
 	}
 
 	// Health check
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		dbOK := "ok"
+		dbOK := true
 		if database.DB == nil {
-			dbOK = "unreachable"
+			dbOK = false
 		} else if sqlDB, err := database.DB.DB(); err != nil || sqlDB.Ping() != nil {
-			dbOK = "unreachable"
-		}
-		status := "ok"
-		if dbOK != "ok" {
-			status = "degraded"
+			dbOK = false
 		}
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"%s","version":"%s","database":"%s"}`,
-			status, cfg.AppVersion, dbOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":   map[bool]string{true: "ok", false: "degraded"}[dbOK],
+			"version":  cfg.AppVersion,
+			"database": map[bool]string{true: "ok", false: "unreachable"}[dbOK],
+		})
 	})
 
-	// Middleware stack
+	// Middleware stack (outermost first)
 	handler := middleware.Recoverer(mux)
 	handler = middleware.RequestID(handler)
 	handler = middleware.CORSMiddleware(cfg.CORSOrigins)(handler)
 	handler = middleware.LimitBodySize(middleware.MaxBodySize)(handler)
-	handler = middleware.NewRateLimit(100, 60*time.Second).Handler(handler)
+	handler = middleware.NewRateLimit(100, 60).Handler(handler)
 
 	// Server
 	addr := ":" + cfg.ServerPort
@@ -102,8 +105,8 @@ func main() {
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		sig := <-sigCh
-		log.Printf("Received signal %v, shutting down gracefully...", sig)
+		<-sigCh
+		log.Println("Shutting down gracefully...")
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -112,7 +115,7 @@ func main() {
 			log.Printf("Shutdown error: %v", err)
 		}
 		if database.DB != nil {
-			if sqlDB, _ := database.DB.DB(); sqlDB != nil {
+			if sqlDB, err := database.DB.DB(); err == nil && sqlDB != nil {
 				sqlDB.Close()
 			}
 		}
@@ -120,7 +123,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	log.Printf("Server listening on %s", addr)
+	log.Printf("Server listening on http://localhost%s", addr)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("Server error: %v", err)
 	}

@@ -13,8 +13,26 @@ import (
 	"github.com/u4399com-beep/novel-manager-come-back/internal/models"
 )
 
-// ListNovels returns paginated, filtered novels with categories eagerly loaded.
-// sortBy is validated against an allowlist to prevent SQL injection.
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type NovelListParams struct {
+	Page, Size      int
+	Search          string
+	CategoryID      *int
+	Status          string
+	SortBy, SortDir string
+}
+
+type NovelListResult struct {
+	Items []models.Novel `json:"items"`
+	Total int64          `json:"total"`
+	Page  int            `json:"page"`
+	Size  int            `json:"size"`
+	Pages int            `json:"pages"`
+}
+
+// ── List / CRUD ────────────────────────────────────────────────────────────
+
 func ListNovels(params NovelListParams) (*NovelListResult, error) {
 	db := database.DB.Preload("Categories")
 
@@ -58,28 +76,9 @@ func ListNovels(params NovelListParams) (*NovelListResult, error) {
 
 	return &NovelListResult{
 		Items: novels, Total: total,
-		Page:  params.Page,
-		Size:  params.Size,
+		Page: params.Page, Size: params.Size,
 		Pages: max(1, int(math.Ceil(float64(total)/float64(params.Size)))),
 	}, nil
-}
-
-// NovelListParams holds filter/sort/pagination parameters.
-type NovelListParams struct {
-	Page, Size     int
-	Search         string
-	CategoryID     *int
-	Status         string
-	SortBy, SortDir string
-}
-
-// NovelListResult wraps paginated novel results.
-type NovelListResult struct {
-	Items []models.Novel `json:"items"`
-	Total int64          `json:"total"`
-	Page  int            `json:"page"`
-	Size  int            `json:"size"`
-	Pages int            `json:"pages"`
 }
 
 func GetNovel(id string) (*models.Novel, error) {
@@ -109,14 +108,30 @@ func CreateNovel(title, author, desc, sourceURL, sourceName, status string, cate
 }
 
 func UpdateNovel(id string, updates map[string]interface{}, categoryIDs []int) (*models.Novel, error) {
-	novel, err := GetNovel(id)
-	if err != nil {
-		return nil, err
+	// Allowlist: only these novel fields can be updated
+	safeUpdates := make(map[string]interface{})
+	allowedKeys := map[string]bool{
+		"title": true, "author": true, "description": true,
+		"source_url": true, "source_name": true, "status": true,
+		"cover_image_url": true,
 	}
-	if err := database.DB.Model(novel).Updates(updates).Error; err != nil {
-		return nil, err
+	for k, v := range updates {
+		if allowedKeys[k] {
+			safeUpdates[k] = v
+		}
 	}
+
+	if len(safeUpdates) > 0 {
+		if err := database.DB.Model(&models.Novel{}).Where("id = ?", id).Updates(safeUpdates).Error; err != nil {
+			return nil, err
+		}
+	}
+
 	if categoryIDs != nil {
+		novel, err := GetNovel(id)
+		if err != nil {
+			return nil, err
+		}
 		var cats []models.Category
 		if len(categoryIDs) > 0 {
 			if err := database.DB.Where("id IN ?", categoryIDs).Find(&cats).Error; err != nil {
@@ -127,6 +142,7 @@ func UpdateNovel(id string, updates map[string]interface{}, categoryIDs []int) (
 			return nil, err
 		}
 	}
+
 	return GetNovel(id)
 }
 
@@ -144,11 +160,9 @@ func GetNovelStatistics(novelID string) map[string]interface{} {
 	database.DB.Model(&models.Chapter{}).Where("novel_id = ?", novelID).
 		Select("MAX(updated_at)").Scan(&lastUpdated)
 	return map[string]interface{}{
-		"novel_id":           novelID,
-		"total_chapters":     totalCh,
-		"published_chapters": publishedCh,
-		"total_words":        totalWords,
-		"last_updated":       lastUpdated,
+		"novel_id": novelID, "total_chapters": totalCh,
+		"published_chapters": publishedCh, "total_words": totalWords,
+		"last_updated": lastUpdated,
 	}
 }
 
@@ -158,18 +172,25 @@ func SaveCoverImage(cfg *config.Config, fileContent []byte, filename string) (st
 		return "", err
 	}
 	ext := filepath.Ext(filename)
-	if ext == "" {
+	if ext == "" || len(ext) > 10 {
 		ext = ".jpg"
 	}
-	b := make([]byte, 16)
-	rand.Read(b)
+
+	b := make([]byte, 12)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate random filename")
+	}
 	storedName := fmt.Sprintf("%x%s", b, ext)
 	filePath := filepath.Join(coversDir, storedName)
+
+	// Path traversal guard
+	cleanDir := filepath.Clean(coversDir)
 	absPath, err := filepath.Abs(filePath)
-	if err != nil || !strings.HasPrefix(absPath, filepath.Clean(coversDir)) {
+	if err != nil || !strings.HasPrefix(absPath, cleanDir) {
 		return "", fmt.Errorf("invalid cover path")
 	}
-	if err := os.WriteFile(filePath, fileContent, 0644); err != nil {
+
+	if err := os.WriteFile(absPath, fileContent, 0644); err != nil {
 		return "", err
 	}
 	return "/static/covers/" + storedName, nil

@@ -128,7 +128,7 @@ func (r *Router) getChapter(w http.ResponseWriter, req *http.Request, chapterID 
 		"volume": ch.Volume, "sort_order": ch.SortOrder,
 		"word_count": ch.WordCount, "source_url": ch.SourceURL,
 		"is_published": ch.IsPublished,
-		"created_at": ch.CreatedAt, "updated_at": ch.UpdatedAt,
+		"created_at":   ch.CreatedAt, "updated_at": ch.UpdatedAt,
 	})
 }
 

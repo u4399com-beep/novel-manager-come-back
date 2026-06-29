@@ -19,24 +19,22 @@ type contextKey string
 const (
 	UserIDKey   contextKey = "user_id"
 	UserRoleKey contextKey = "user_role"
+	MaxBodySize int64      = 1 << 20 // 1 MB
 )
 
-// MaxBodySize limits JSON request bodies to prevent memory exhaustion.
-const MaxBodySize = 1 << 20 // 1 MB
+const maxRateLimitBuckets = 100000
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
-// AuthRequired validates JWT Bearer tokens.
 func AuthRequired(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			ah := r.Header.Get("Authorization")
+			if ah == "" || !strings.HasPrefix(ah, "Bearer ") {
 				http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
 				return
 			}
-			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-			claims, err := services.ParseAccessToken(cfg, tokenStr)
+			claims, err := services.ParseAccessToken(cfg, strings.TrimPrefix(ah, "Bearer "))
 			if err != nil {
 				http.Error(w, `{"error":"invalid or expired token"}`, http.StatusUnauthorized)
 				return
@@ -54,49 +52,48 @@ func AuthRequired(cfg *config.Config) func(http.Handler) http.Handler {
 	}
 }
 
-// ── Rate Limiter ─────────────────────────────────────────────────────────────
+// ── Rate Limiter (token bucket with refill) ─────────────────────────────────
 
 type RateLimit struct {
-	maxRequests int
-	window      time.Duration
-	mu          sync.Mutex
-	buckets     map[string]*bucket
-	maxBuckets  int // hard cap to prevent memory exhaustion
+	rate    float64 // tokens per second
+	burst   int     // max tokens
+	mu      sync.Mutex
+	buckets map[string]*tokenBucket
 }
 
-type bucket struct {
-	tokens   int
+type tokenBucket struct {
+	tokens   float64
 	lastSeen time.Time
 }
 
-func NewRateLimit(maxRequests int, window time.Duration) *RateLimit {
+func NewRateLimit(maxRequests int, windowSeconds int) *RateLimit {
 	rl := &RateLimit{
-		maxRequests: maxRequests,
-		window:      window,
-		buckets:     make(map[string]*bucket),
-		maxBuckets:  200000,
+		rate:    float64(maxRequests) / float64(windowSeconds),
+		burst:   maxRequests,
+		buckets: make(map[string]*tokenBucket),
 	}
-	go func() {
-		for {
-			time.Sleep(5 * time.Minute)
-			rl.cleanup()
-		}
-	}()
+	go rl.periodicCleanup(5 * time.Minute)
 	return rl
+}
+
+func (rl *RateLimit) periodicCleanup(interval time.Duration) {
+	for {
+		time.Sleep(interval)
+		rl.cleanup()
+	}
 }
 
 func (rl *RateLimit) cleanup() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
-	cutoff := time.Now().Add(-rl.window)
+	cutoff := time.Now().Add(-5 * time.Minute)
 	for ip, b := range rl.buckets {
 		if b.lastSeen.Before(cutoff) {
 			delete(rl.buckets, ip)
 		}
 	}
-	// Hard eviction if under DDoS: remove oldest entries
-	if len(rl.buckets) > rl.maxBuckets {
-		excess := len(rl.buckets) - rl.maxBuckets/2
+	if len(rl.buckets) > maxRateLimitBuckets {
+		excess := len(rl.buckets) - maxRateLimitBuckets/2
 		for ip := range rl.buckets {
 			if excess <= 0 {
 				break
@@ -104,8 +101,34 @@ func (rl *RateLimit) cleanup() {
 			delete(rl.buckets, ip)
 			excess--
 		}
-		log.Printf("RateLimit: hard eviction triggered (%d buckets → %d)", len(rl.buckets)+rl.maxBuckets/2, len(rl.buckets))
+		log.Printf("RateLimit: hard eviction (%d buckets)", len(rl.buckets))
 	}
+}
+
+func (rl *RateLimit) allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	b, ok := rl.buckets[ip]
+	if !ok {
+		rl.buckets[ip] = &tokenBucket{tokens: float64(rl.burst) - 1, lastSeen: now}
+		return true
+	}
+
+	// Refill tokens based on elapsed time
+	elapsed := now.Sub(b.lastSeen).Seconds()
+	b.tokens += elapsed * rl.rate
+	if b.tokens > float64(rl.burst) {
+		b.tokens = float64(rl.burst)
+	}
+	b.lastSeen = now
+
+	if b.tokens >= 1 {
+		b.tokens--
+		return true
+	}
+	return false
 }
 
 func (rl *RateLimit) Handler(next http.Handler) http.Handler {
@@ -114,31 +137,16 @@ func (rl *RateLimit) Handler(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		ip := clientIP(r)
-		rl.mu.Lock()
-		b, ok := rl.buckets[ip]
-		if !ok || time.Since(b.lastSeen) > rl.window {
-			b = &bucket{tokens: rl.maxRequests - 1, lastSeen: time.Now()}
-			rl.buckets[ip] = b
-			rl.mu.Unlock()
-			next.ServeHTTP(w, r)
-			return
-		}
-		b.lastSeen = time.Now()
-		if b.tokens <= 0 {
-			rl.mu.Unlock()
+		if !rl.allow(clientIP(r)) {
 			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
 			return
 		}
-		b.tokens--
-		rl.mu.Unlock()
 		next.ServeHTTP(w, r)
 	})
 }
 
 // ── Body Size Limiter ──────────────────────────────────────────────────────
 
-// LimitBodySize returns middleware that rejects oversized request bodies.
 func LimitBodySize(maxSize int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -209,14 +217,16 @@ func RequestID(next http.Handler) http.Handler {
 
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
+		if idx := strings.IndexByte(xff, ','); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
 	}
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
+		return strings.TrimSpace(xri)
 	}
 	host := r.RemoteAddr
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
+	if idx := strings.LastIndexByte(host, ':'); idx != -1 {
 		return host[:idx]
 	}
 	return host

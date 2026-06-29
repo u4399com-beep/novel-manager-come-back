@@ -1,4 +1,4 @@
-// Package api provides the REST JSON API handlers.
+// Package api provides the REST JSON API handlers under /api/v1.
 package api
 
 import (
@@ -20,61 +20,69 @@ func NewRouter(cfg *config.Config) *Router {
 func (r *Router) Register(mux *http.ServeMux) {
 	p := r.cfg.APIPrefix // /api/v1
 
-	// Public endpoints (no auth)
+	// Public (no auth required)
 	mux.HandleFunc(p+"/register", r.handleRegister)
 	mux.HandleFunc(p+"/login", r.handleLogin)
 	mux.HandleFunc(p+"/search", r.handleSearch)
 
-	// Protected
-	auth := middleware.AuthRequired(r.cfg)
+	// Protected by JWT
+	authMW := middleware.AuthRequired(r.cfg)
 
-	// Auth
-	mux.Handle(p+"/me", auth(http.HandlerFunc(r.handleMe)))
-	mux.Handle(p+"/me", auth(http.HandlerFunc(r.handleUpdateMe)).(http.HandlerFunc)) // PUT
+	// User profile (GET + PUT on same path via method dispatch)
+	mux.Handle(p+"/me", authMW(http.HandlerFunc(r.handleMe)))
 
-	// Novels list/create
-	mux.HandleFunc(p+"/novels", func(w http.ResponseWriter, req *http.Request) {
-		// Route: /api/v1/novels (exact) → list or create
-		if req.URL.Path == p+"/novels" || req.URL.Path == p+"/novels/" {
-			if req.Method == http.MethodGet {
-				r.listNovels(w, req)
-			} else if req.Method == http.MethodPost {
-				r.createNovel(w, req)
-			} else {
-				writeError(w, http.StatusMethodNotAllowed, "GET/POST required")
-			}
-			return
-		}
-		// Route: /api/v1/novels/{id}/... → single novel, chapters, cover, stats
-		r.routeNovelsPrefix(w, req)
-	})
+	// Novels (REST + nested routes)
+	mux.HandleFunc(p+"/novels", r.handleNovelsRouting)
+	mux.HandleFunc(p+"/novels/", r.handleNovelsRouting)
 
-	// Categories
-	mux.HandleFunc(p+"/categories", r.handleCategories)
-	mux.HandleFunc(p+"/categories/", r.handleCategoryByID)
+	// Categories (auth required)
+	mux.Handle(p+"/categories", authMW(http.HandlerFunc(r.handleCategories)))
+	mux.Handle(p+"/categories/", authMW(http.HandlerFunc(r.handleCategoryByID)))
 
 	// Crawler
-	mux.HandleFunc(p+"/crawler/sources", r.handleSources)
-	mux.HandleFunc(p+"/crawler/trigger", r.handleCrawlTrigger)
-	mux.HandleFunc(p+"/crawler/tasks", r.handleCrawlTasks)
-	mux.HandleFunc(p+"/crawler/tasks/", r.handleCrawlTaskByID)
-	mux.HandleFunc(p+"/crawler/stats", r.handleCrawlStats)
+	mux.Handle(p+"/crawler/sources", authMW(http.HandlerFunc(r.handleSources)))
+	mux.Handle(p+"/crawler/trigger", authMW(http.HandlerFunc(r.handleCrawlTrigger)))
+	mux.Handle(p+"/crawler/tasks", authMW(http.HandlerFunc(r.handleCrawlTasks)))
+	mux.Handle(p+"/crawler/tasks/", authMW(http.HandlerFunc(r.handleCrawlTaskByID)))
+	mux.Handle(p+"/crawler/stats", authMW(http.HandlerFunc(r.handleCrawlStats)))
 
 	// Sites
-	mux.HandleFunc(p+"/sites", r.handleSites)
-	mux.HandleFunc(p+"/sites/", r.handleSiteByID)
+	mux.Handle(p+"/sites", authMW(http.HandlerFunc(r.handleSites)))
+	mux.Handle(p+"/sites/", authMW(http.HandlerFunc(r.handleSiteByID)))
 
 	// Link rings
-	mux.HandleFunc(p+"/link-rings", r.handleLinkRings)
-	mux.HandleFunc(p+"/link-rings/", r.handleLinkRingByID)
+	mux.Handle(p+"/link-rings", authMW(http.HandlerFunc(r.handleLinkRings)))
+	mux.Handle(p+"/link-rings/", authMW(http.HandlerFunc(r.handleLinkRingByID)))
 
 	// Cache admin
-	mux.HandleFunc(p+"/cache/health", r.handleCacheHealth)
-	mux.HandleFunc(p+"/cache/flush", r.handleCacheFlush)
+	mux.Handle(p+"/cache/health", authMW(http.HandlerFunc(r.handleCacheHealth)))
+	mux.Handle(p+"/cache/flush", authMW(http.HandlerFunc(r.handleCacheFlush)))
 
 	// Repair
-	mux.HandleFunc(p+"/repair/status", r.handleRepairStatus)
-	mux.HandleFunc(p+"/repair/chapters", r.handleRepairChapters)
+	mux.Handle(p+"/repair/status", authMW(http.HandlerFunc(r.handleRepairStatus)))
+	mux.Handle(p+"/repair/chapters", authMW(http.HandlerFunc(r.handleRepairChapters)))
+}
+
+// handleNovelsRouting dispatches /api/v1/novels and /api/v1/novels/{id}/...
+func (r *Router) handleNovelsRouting(w http.ResponseWriter, req *http.Request) {
+	path := req.URL.Path
+	prefix := r.cfg.APIPrefix + "/novels"
+
+	// Exact match on /api/v1/novels or /api/v1/novels/
+	if path == prefix || path == prefix+"/" {
+		switch req.Method {
+		case http.MethodGet:
+			r.listNovels(w, req)
+		case http.MethodPost:
+			r.createNovel(w, req)
+		default:
+			writeError(w, http.StatusMethodNotAllowed, "GET/POST required")
+		}
+		return
+	}
+
+	// Sub-path: /api/v1/novels/{id}/...
+	r.routeNovelsPrefix(w, req)
 }
 
 // ── JSON helpers ───────────────────────────────────────────────────────────

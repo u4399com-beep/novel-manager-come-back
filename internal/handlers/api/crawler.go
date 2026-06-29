@@ -147,10 +147,10 @@ func (r *Router) handleCrawlStats(w http.ResponseWriter, req *http.Request) {
 	database.DB.Model(&models.CrawlerTask{}).Where("status = ?", "pending").Count(&pending)
 
 	writeOK(w, map[string]interface{}{
-		"novels":         totalN,
-		"chapters":       totalCh,
-		"tasks_total":    totalTasks,
-		"tasks_pending":  pending,
-		"words_total":    0,
+		"novels":        totalN,
+		"chapters":      totalCh,
+		"tasks_total":   totalTasks,
+		"tasks_pending": pending,
+		"words_total":   0,
 	})
 }

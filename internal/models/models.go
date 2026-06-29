@@ -1,5 +1,4 @@
-// Package models defines GORM entity structs matching the novel_come_back schema.
-// All tables use UUIDv4 string primary keys (except categories: auto-increment).
+// Package models defines GORM entity structs for novel_come_back schema.
 package models
 
 import (
@@ -9,14 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ── Base types ─────────────────────────────────────────────────────────────
-
-// BeforeCreate hook sets UUID primary key on create.
-func setUUID(tx *gorm.DB) {
-	// UUID generation is handled per-model via hooks or GORM's default.
-}
-
-// TimestampMixin provides created_at / updated_at shared columns.
+// TimestampMixin provides auto-managed created_at / updated_at.
 type TimestampMixin struct {
 	CreatedAt time.Time `gorm:"autoCreateTime:milli" json:"created_at"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime:milli" json:"updated_at"`
@@ -25,12 +17,12 @@ type TimestampMixin struct {
 // ── User ───────────────────────────────────────────────────────────────────
 
 type User struct {
-	ID             string         `gorm:"type:varchar(36);primaryKey" json:"id"`
-	Username       string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"username"`
-	Email          string         `gorm:"type:varchar(255);uniqueIndex;" json:"email"`
-	HashedPassword string         `gorm:"type:varchar(255);not null" json:"-"`
-	Role           string         `gorm:"type:varchar(20);default:user" json:"role"`
-	IsActive       bool           `gorm:"default:true" json:"is_active"`
+	ID             string `gorm:"type:varchar(36);primaryKey" json:"id"`
+	Username       string `gorm:"type:varchar(100);uniqueIndex;not null" json:"username"`
+	Email          string `gorm:"type:varchar(255);uniqueIndex" json:"email"`
+	HashedPassword string `gorm:"type:varchar(255);not null" json:"-"`
+	Role           string `gorm:"type:varchar(20);default:user" json:"role"`
+	IsActive       bool   `gorm:"default:true" json:"is_active"`
 	TimestampMixin
 }
 
@@ -47,102 +39,99 @@ type Category struct {
 // ── Novel ──────────────────────────────────────────────────────────────────
 
 type Novel struct {
-	ID             string     `gorm:"type:varchar(36);primaryKey" json:"id"`
-	Title          string     `gorm:"type:varchar(255);not null;index" json:"title"`
-	Author         string     `gorm:"type:varchar(100)" json:"author"`
-	Description    string     `gorm:"type:text" json:"description"`
-	CoverImageURL  string     `gorm:"type:varchar(500)" json:"cover_image_url"`
-	SourceURL      string     `gorm:"type:varchar(500)" json:"source_url"`
-	SourceName     string     `gorm:"type:varchar(50)" json:"source_name"`
-	Status         string     `gorm:"type:varchar(20);default:ongoing" json:"status"`
-	TotalChapters  int        `gorm:"default:0" json:"total_chapters"`
-	Categories     []Category `gorm:"many2many:novel_categories" json:"categories,omitempty"`
-	Chapters       []Chapter  `gorm:"foreignKey:NovelID;constraint:OnDelete:CASCADE" json:"chapters,omitempty"`
-	CrawlerTasks   []CrawlerTask `gorm:"foreignKey:NovelID" json:"-"`
+	ID            string     `gorm:"type:varchar(36);primaryKey" json:"id"`
+	Title         string     `gorm:"type:varchar(255);not null;index" json:"title"`
+	Author        string     `gorm:"type:varchar(100)" json:"author"`
+	Description   string     `gorm:"type:text" json:"description"`
+	CoverImageURL string     `gorm:"type:varchar(500)" json:"cover_image_url"`
+	SourceURL     string     `gorm:"type:varchar(500)" json:"source_url"`
+	SourceName    string     `gorm:"type:varchar(50)" json:"source_name"`
+	Status        string     `gorm:"type:varchar(20);default:ongoing" json:"status"`
+	TotalChapters int        `gorm:"default:0" json:"total_chapters"`
+	Categories    []Category `gorm:"many2many:novel_categories" json:"categories,omitempty"`
+	Chapters      []Chapter  `gorm:"foreignKey:NovelID;constraint:OnDelete:CASCADE" json:"chapters,omitempty"`
 	TimestampMixin
 }
 
 // ── Chapter ────────────────────────────────────────────────────────────────
 
 type Chapter struct {
-	ID          string       `gorm:"type:varchar(36);primaryKey" json:"id"`
-	NovelID     string       `gorm:"type:varchar(36);not null;index:idx_novel_sort,priority:1" json:"novel_id"`
-	Title       string       `gorm:"type:varchar(500);not null" json:"title"`
-	Content     string       `gorm:"type:longtext" json:"content,omitempty"`
-	ContentFile string       `gorm:"type:varchar(255)" json:"content_file,omitempty"`
-	Volume      string       `gorm:"type:varchar(100)" json:"volume"`
-	SortOrder   int          `gorm:"not null;index:idx_novel_sort,priority:2" json:"sort_order"`
-	WordCount   int          `gorm:"default:0" json:"word_count"`
-	SourceURL   string       `gorm:"type:varchar(500);index" json:"source_url"`
-	IsPublished bool         `gorm:"default:true" json:"is_published"`
+	ID          string `gorm:"type:varchar(36);primaryKey" json:"id"`
+	NovelID     string `gorm:"type:varchar(36);not null;index:idx_novel_sort,priority:1" json:"novel_id"`
+	Title       string `gorm:"type:varchar(500);not null" json:"title"`
+	Content     string `gorm:"type:longtext" json:"-"`
+	ContentFile string `gorm:"type:varchar(255)" json:"-"`
+	Volume      string `gorm:"type:varchar(100)" json:"volume"`
+	SortOrder   int    `gorm:"not null;index:idx_novel_sort,priority:2" json:"sort_order"`
+	WordCount   int    `gorm:"default:0" json:"word_count"`
+	SourceURL   string `gorm:"type:varchar(500);index" json:"source_url"`
+	IsPublished bool   `gorm:"default:true" json:"is_published"`
 	TimestampMixin
-
-	Novel *Novel `gorm:"foreignKey:NovelID" json:"novel,omitempty"`
 }
 
 // ── CrawlerTask ────────────────────────────────────────────────────────────
 
 type CrawlerTask struct {
-	ID             string         `gorm:"type:varchar(36);primaryKey" json:"id"`
-	NovelID        string         `gorm:"type:varchar(36);not null;index:idx_task_novel_status,priority:1" json:"novel_id"`
-	Status         string         `gorm:"type:varchar(20);default:pending;index:idx_task_status_created,priority:1;index:idx_task_novel_status,priority:2" json:"status"`
-	ChaptersFound  int            `gorm:"default:0" json:"chapters_found"`
-	ChaptersAdded  int            `gorm:"default:0" json:"chapters_added"`
-	ErrorMessage   sql.NullString `gorm:"type:text" json:"error_message"`
-	StartedAt      sql.NullTime   `json:"started_at"`
-	FinishedAt     sql.NullTime   `json:"finished_at"`
+	ID            string         `gorm:"type:varchar(36);primaryKey" json:"id"`
+	NovelID       string         `gorm:"type:varchar(36);not null;index" json:"novel_id"`
+	Status        string         `gorm:"type:varchar(20);default:pending;index" json:"status"`
+	ChaptersFound int            `gorm:"default:0" json:"chapters_found"`
+	ChaptersAdded int            `gorm:"default:0" json:"chapters_added"`
+	ErrorMessage  sql.NullString `gorm:"type:text" json:"error_message"`
+	StartedAt     sql.NullTime   `json:"started_at"`
+	FinishedAt    sql.NullTime   `json:"finished_at"`
 	TimestampMixin
 }
 
 // ── Site ───────────────────────────────────────────────────────────────────
 
 type Site struct {
-	ID                string `gorm:"type:varchar(36);primaryKey" json:"id"`
-	Domain            string `gorm:"type:varchar(255);uniqueIndex;not null" json:"domain"`
-	Name              string `gorm:"type:varchar(100);not null" json:"name"`
-	Template          string `gorm:"type:varchar(50);default:default" json:"template"`
-	Offset            int    `gorm:"column:offset_val;default:0" json:"offset"`
-	Description       string `gorm:"type:text" json:"description"`
-	IsActive          bool   `gorm:"default:true" json:"is_active"`
-	TranslateEnabled  bool   `gorm:"default:true" json:"translate_enabled"`
-	Language          string `gorm:"type:varchar(10);default:zh" json:"language"`
-	URLPatterns       string `gorm:"type:json" json:"url_patterns,omitempty"`
-	ChapterPagination string `gorm:"type:json" json:"chapter_pagination,omitempty"`
-	LinkWheel         string `gorm:"type:json" json:"link_wheel,omitempty"`
-	RecommendModules  string `gorm:"type:json" json:"recommend_modules,omitempty"`
+	ID               string `gorm:"type:varchar(36);primaryKey" json:"id"`
+	Domain           string `gorm:"type:varchar(255);uniqueIndex;not null" json:"domain"`
+	Name             string `gorm:"type:varchar(100);not null" json:"name"`
+	Template         string `gorm:"type:varchar(50);default:default" json:"template"`
+	Offset           int    `gorm:"column:offset_val;default:0" json:"offset"`
+	Description      string `gorm:"type:text" json:"description"`
+	IsActive         bool   `gorm:"default:true" json:"is_active"`
+	TranslateEnabled bool   `gorm:"default:true" json:"translate_enabled"`
+	Language         string `gorm:"type:varchar(10);default:zh" json:"language"`
+	// JSON columns stored as byte slices for proper serialization
+	URLPatterns       []byte `gorm:"type:json" json:"url_patterns,omitempty"`
+	ChapterPagination []byte `gorm:"type:json" json:"chapter_pagination,omitempty"`
+	LinkWheel         []byte `gorm:"type:json" json:"link_wheel,omitempty"`
+	RecommendModules  []byte `gorm:"type:json" json:"recommend_modules,omitempty"`
 	TimestampMixin
 }
 
 // ── LinkRing ───────────────────────────────────────────────────────────────
 
 type LinkRing struct {
-	ID             string `gorm:"type:varchar(36);primaryKey" json:"id"`
-	Name           string `gorm:"type:varchar(100);not null" json:"name"`
-	RingType       string `gorm:"type:varchar(30);default:cross_site" json:"ring_type"`
-	SiteID         string `gorm:"type:varchar(36);index" json:"site_id"`
-	MaxLinks       int    `gorm:"default:10" json:"max_links"`
-	DisplayMode    string `gorm:"type:varchar(20);default:sidebar" json:"display_mode"`
-	LinkFormat     string `gorm:"type:varchar(500)" json:"link_format"`
-	OpenNewTab     bool   `gorm:"default:true" json:"open_new_tab"`
-	Nofollow       bool   `gorm:"default:false" json:"nofollow"`
-	SelectionRules string `gorm:"type:json" json:"selection_rules"`
-	IsActive       bool   `gorm:"default:true" json:"is_active"`
+	ID             string           `gorm:"type:varchar(36);primaryKey" json:"id"`
+	Name           string           `gorm:"type:varchar(100);not null" json:"name"`
+	RingType       string           `gorm:"type:varchar(30);default:cross_site" json:"ring_type"`
+	SiteID         string           `gorm:"type:varchar(36);index" json:"site_id"`
+	MaxLinks       int              `gorm:"default:10" json:"max_links"`
+	DisplayMode    string           `gorm:"type:varchar(20);default:sidebar" json:"display_mode"`
+	LinkFormat     string           `gorm:"type:varchar(500)" json:"link_format"`
+	OpenNewTab     bool             `gorm:"default:true" json:"open_new_tab"`
+	Nofollow       bool             `gorm:"default:false" json:"nofollow"`
+	SelectionRules []byte           `gorm:"type:json" json:"selection_rules"`
+	IsActive       bool             `gorm:"default:true" json:"is_active"`
+	Targets        []LinkRingTarget `gorm:"foreignKey:RingID;constraint:OnDelete:CASCADE" json:"targets,omitempty"`
 	TimestampMixin
-
-	Targets []LinkRingTarget `gorm:"foreignKey:RingID;constraint:OnDelete:CASCADE" json:"targets,omitempty"`
 }
 
 type LinkRingTarget struct {
-	ID             string `gorm:"type:varchar(36);primaryKey" json:"id"`
-	RingID         string `gorm:"type:varchar(36);not null;index" json:"ring_id"`
-	SourceSiteID   string `gorm:"type:varchar(36)" json:"source_site_id"`
-	SourceNovelID  string `gorm:"type:varchar(36)" json:"source_novel_id"`
-	TargetSiteID   string `gorm:"type:varchar(36)" json:"target_site_id"`
-	TargetNovelID  string `gorm:"type:varchar(36)" json:"target_novel_id"`
-	TargetURL      string `gorm:"type:varchar(500)" json:"target_url"`
-	AnchorText     string `gorm:"type:varchar(255)" json:"anchor_text"`
-	SortOrder      int    `gorm:"default:0" json:"sort_order"`
-	IsActive       bool   `gorm:"default:true" json:"is_active"`
+	ID            string `gorm:"type:varchar(36);primaryKey" json:"id"`
+	RingID        string `gorm:"type:varchar(36);not null;index" json:"ring_id"`
+	SourceSiteID  string `gorm:"type:varchar(36)" json:"source_site_id"`
+	SourceNovelID string `gorm:"type:varchar(36)" json:"source_novel_id"`
+	TargetSiteID  string `gorm:"type:varchar(36)" json:"target_site_id"`
+	TargetNovelID string `gorm:"type:varchar(36)" json:"target_novel_id"`
+	TargetURL     string `gorm:"type:varchar(500)" json:"target_url"`
+	AnchorText    string `gorm:"type:varchar(255)" json:"anchor_text"`
+	SortOrder     int    `gorm:"default:0" json:"sort_order"`
+	IsActive      bool   `gorm:"default:true" json:"is_active"`
 	TimestampMixin
 }
 
@@ -158,7 +147,7 @@ type TranslationCache struct {
 	TimestampMixin
 }
 
-// ── Hooks ──────────────────────────────────────────────────────────────────
+// ── GORM Hooks ─────────────────────────────────────────────────────────────
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {
 	if u.ID == "" {

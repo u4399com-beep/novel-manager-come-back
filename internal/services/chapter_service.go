@@ -2,36 +2,45 @@ package services
 
 import (
 	"compress/gzip"
+	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/u4399com-beep/novel-manager-come-back/internal/database"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/models"
+	"gorm.io/gorm"
 )
 
 // ── Word count ─────────────────────────────────────────────────────────────
 
-var (
-	reChinese = regexp.MustCompile(`[\x{4e00}-\x{9fff}]`)
-	reEnglish = regexp.MustCompile(`[a-zA-Z]+`)
-	reHTML    = regexp.MustCompile(`<[^>]+>`)
-)
-
-// CountWords counts Chinese characters + English words in text.
+// CountWords counts Chinese characters + English words in text without regex.
 func CountWords(text string) int {
 	if text == "" {
 		return 0
 	}
-	clean := reHTML.ReplaceAllString(text, "")
-	return len(reChinese.FindAllString(clean, -1)) + len(reEnglish.FindAllString(clean, -1))
+	// Fast path: single-pass counting
+	chinese, english, inWord := 0, 0, false
+	for _, r := range text {
+		if r >= 0x4e00 && r <= 0x9fff {
+			chinese++
+			inWord = false
+		} else if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			if !inWord {
+				english++
+				inWord = true
+			}
+		} else {
+			inWord = false
+		}
+	}
+	return chinese + english
 }
 
 // ── Chapter CRUD ───────────────────────────────────────────────────────────
 
-// GetChapters returns paginated chapters for a novel.
 func GetChapters(novelID string, page, size int) ([]models.Chapter, int64, error) {
 	var total int64
 	database.DB.Model(&models.Chapter{}).Where("novel_id = ?", novelID).Count(&total)
@@ -39,15 +48,13 @@ func GetChapters(novelID string, page, size int) ([]models.Chapter, int64, error
 	var chapters []models.Chapter
 	if err := database.DB.Where("novel_id = ?", novelID).
 		Order("sort_order ASC").
-		Offset((page - 1) * size).
-		Limit(size).
+		Offset((page - 1) * size).Limit(size).
 		Find(&chapters).Error; err != nil {
 		return nil, 0, err
 	}
 	return chapters, total, nil
 }
 
-// GetChapter retrieves a single chapter by ID.
 func GetChapter(chapterID string) (*models.Chapter, error) {
 	var ch models.Chapter
 	if err := database.DB.Where("id = ?", chapterID).First(&ch).Error; err != nil {
@@ -56,10 +63,9 @@ func GetChapter(chapterID string) (*models.Chapter, error) {
 	return &ch, nil
 }
 
-// GetChapterContent reads chapter content from compressed file store (with DB fallback).
 func GetChapterContent(ch *models.Chapter) (string, error) {
 	if ch.ContentFile != "" {
-		text, err := ReadContentFile(ch.NovelID, ch.ID, ch.ContentFile)
+		text, err := ReadContentFile(ch.ContentFile)
 		if err == nil && text != "" {
 			return text, nil
 		}
@@ -67,8 +73,10 @@ func GetChapterContent(ch *models.Chapter) (string, error) {
 	return ch.Content, nil
 }
 
-// CreateChapter inserts a single chapter and updates novel's denormalized count.
 func CreateChapter(novelID, title, content, sourceURL string, sortOrder int, isPublished bool) (*models.Chapter, error) {
+	if novelID == "" || utf8.RuneCountInString(novelID) < 2 {
+		return nil, fmt.Errorf("invalid novel_id")
+	}
 	if sortOrder <= 0 {
 		var maxOrder int
 		database.DB.Model(&models.Chapter{}).
@@ -93,37 +101,49 @@ func CreateChapter(novelID, title, content, sourceURL string, sortOrder int, isP
 	if content != "" {
 		contentFile, err := WriteContentFile(novelID, ch.ID, content)
 		if err == nil {
-			ch.ContentFile = contentFile
 			database.DB.Model(ch).Update("content_file", contentFile)
+			ch.ContentFile = contentFile
 		}
 	}
 
-	// Atomic increment of total_chapters
 	recountNovelChapters(novelID, 1)
-
 	return ch, nil
 }
 
-// UpdateChapter applies partial updates to a chapter.
 func UpdateChapter(chapterID string, updates map[string]interface{}) (*models.Chapter, error) {
 	ch, err := GetChapter(chapterID)
 	if err != nil {
 		return nil, err
 	}
-	if content, ok := updates["content"].(string); ok {
-		updates["word_count"] = CountWords(content)
-		contentFile, err := WriteContentFile(ch.NovelID, ch.ID, content)
-		if err == nil {
-			updates["content_file"] = contentFile
+
+	// Allowlist: only these fields can be updated
+	safeUpdates := make(map[string]interface{})
+	allowedKeys := map[string]bool{
+		"title": true, "content": true, "source_url": true,
+		"sort_order": true, "is_published": true, "volume": true,
+	}
+	for k, v := range updates {
+		if allowedKeys[k] {
+			safeUpdates[k] = v
 		}
 	}
-	if err := database.DB.Model(ch).Updates(updates).Error; err != nil {
-		return nil, err
+
+	if content, ok := safeUpdates["content"].(string); ok {
+		safeUpdates["word_count"] = CountWords(content)
+		contentFile, err := WriteContentFile(ch.NovelID, ch.ID, content)
+		if err == nil {
+			safeUpdates["content_file"] = contentFile
+		}
+	}
+
+	if len(safeUpdates) > 0 {
+		if err := database.DB.Model(ch).Updates(safeUpdates).Error; err != nil {
+			return nil, err
+		}
 	}
 	return GetChapter(chapterID)
 }
 
-// DeleteChapter removes a chapter and updates novel count.
 func DeleteChapter(chapterID string) error {
 	ch, err := GetChapter(chapterID)
 	if err != nil {
@@ -136,7 +156,6 @@ func DeleteChapter(chapterID string) error {
 	return nil
 }
 
-// BatchCreateChapters inserts multiple chapters efficiently.
 func BatchCreateChapters(novelID string, chaptersData []map[string]interface{}) ([]models.Chapter, error) {
 	var maxOrder int
 	database.DB.Model(&models.Chapter{}).Where("novel_id = ?", novelID).
@@ -150,8 +169,8 @@ func BatchCreateChapters(novelID string, chaptersData []map[string]interface{}) 
 		volume, _ := data["volume"].(string)
 
 		sortOrder := maxOrder + i + 1
-		if so, ok := data["sort_order"].(int); ok && so > 0 {
-			sortOrder = so
+		if so, ok := data["sort_order"].(float64); ok && int(so) > 0 {
+			sortOrder = int(so)
 		}
 
 		ch := models.Chapter{
@@ -169,18 +188,18 @@ func BatchCreateChapters(novelID string, chaptersData []map[string]interface{}) 
 		return nil, err
 	}
 
-	// Write content files concurrently
+	// Write content files in background (fire-and-forget with error logging)
 	var wg sync.WaitGroup
 	for i := range chapters {
 		if content, ok := chaptersData[i]["content"].(string); ok && content != "" {
 			wg.Add(1)
-			go func(idx int, txt string) {
+			go func(idx int, novelID, chapterID, txt string) {
 				defer wg.Done()
-				contentFile, err := WriteContentFile(novelID, chapters[idx].ID, txt)
-				if err == nil {
-					database.DB.Model(&chapters[idx]).Update("content_file", contentFile)
+				if cf, err := WriteContentFile(novelID, chapterID, txt); err == nil {
+					database.DB.Model(&models.Chapter{}).Where("id = ?", chapterID).
+						Update("content_file", cf)
 				}
-			}(i, content)
+			}(i, novelID, chapters[i].ID, content)
 		}
 	}
 	wg.Wait()
@@ -189,7 +208,6 @@ func BatchCreateChapters(novelID string, chaptersData []map[string]interface{}) 
 	return chapters, nil
 }
 
-// BatchDeleteChapters removes multiple chapters atomically.
 func BatchDeleteChapters(novelID string, chapterIDs []string) (int64, error) {
 	if len(chapterIDs) == 0 {
 		return 0, nil
@@ -202,35 +220,44 @@ func BatchDeleteChapters(novelID string, chapterIDs []string) (int64, error) {
 	return result.RowsAffected, nil
 }
 
-// ReorderChapters bulk-updates sort_order with a CASE expression.
 func ReorderChapters(novelID string, orders map[string]int) error {
 	if len(orders) == 0 {
 		return nil
 	}
-	tx := database.DB.Begin()
-	for chID, newOrder := range orders {
-		if err := tx.Model(&models.Chapter{}).Where("id = ? AND novel_id = ?", chID, novelID).
-			Update("sort_order", newOrder).Error; err != nil {
-			tx.Rollback()
-			return err
+	// Bulk update using a single transaction with CASE WHEN
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		for chID, newOrder := range orders {
+			if err := tx.Model(&models.Chapter{}).
+				Where("id = ? AND novel_id = ?", chID, novelID).
+				Update("sort_order", newOrder).Error; err != nil {
+				return err
+			}
 		}
-	}
-	return tx.Commit().Error
+		return nil
+	})
 }
 
 // ── Content file store ─────────────────────────────────────────────────────
 
 const contentDir = "data/content"
 
-// WriteContentFile compresses and saves chapter content to disk.
 func WriteContentFile(novelID, chapterID, content string) (string, error) {
-	dir := filepath.Join(contentDir, novelID[:min(2, len(novelID))], novelID)
+	if novelID == "" || chapterID == "" {
+		return "", fmt.Errorf("invalid IDs")
+	}
+	prefix := novelID[:min(2, len(novelID))]
+	dir := filepath.Join(contentDir, prefix, novelID)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}
 
-	relPath := filepath.Join(novelID[:min(2, len(novelID))], novelID, chapterID+".gz")
+	relPath := filepath.Join(prefix, novelID, chapterID+".gz")
 	absPath := filepath.Join(contentDir, relPath)
+
+	// Validate path stays within contentDir
+	if !strings.HasPrefix(filepath.Clean(absPath), filepath.Clean(contentDir)) {
+		return "", fmt.Errorf("path traversal detected")
+	}
 
 	f, err := os.Create(absPath)
 	if err != nil {
@@ -240,16 +267,21 @@ func WriteContentFile(novelID, chapterID, content string) (string, error) {
 
 	gw := gzip.NewWriter(f)
 	if _, err := gw.Write([]byte(content)); err != nil {
+		gw.Close()
 		return "", err
 	}
-	gw.Close()
-
+	if err := gw.Close(); err != nil {
+		return "", err
+	}
 	return relPath, nil
 }
 
-// ReadContentFile reads and decompresses chapter content from disk.
-func ReadContentFile(novelID, chapterID, contentFile string) (string, error) {
+func ReadContentFile(contentFile string) (string, error) {
 	path := filepath.Join(contentDir, contentFile)
+	if !strings.HasPrefix(filepath.Clean(path), filepath.Clean(contentDir)) {
+		return "", fmt.Errorf("path traversal detected")
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
@@ -279,7 +311,13 @@ func ReadContentFile(novelID, chapterID, contentFile string) (string, error) {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 func recountNovelChapters(novelID string, delta int) {
-	// Use database expression for atomic read-modify-write (prevents race conditions)
 	database.DB.Model(&models.Novel{}).Where("id = ?", novelID).
-		UpdateColumn("total_chapters", database.DB.Raw("total_chapters + ?", delta))
+		UpdateColumn("total_chapters", gorm.Expr("total_chapters + ?", delta))
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -1,7 +1,8 @@
-// Package database provides MySQL connection pool management.
+// Package database provides connection pool management for MySQL and SQLite.
 package database
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -22,8 +23,7 @@ var (
 	mu   sync.RWMutex
 )
 
-// Init opens the database connection pool. Safe to call multiple times
-// (subsequent calls are no-ops thanks to sync.Once).
+// Init initializes the database connection pool. Thread-safe via sync.Once.
 func Init(cfg *config.Config) error {
 	var initErr error
 	once.Do(func() {
@@ -35,9 +35,14 @@ func Init(cfg *config.Config) error {
 func initDB(cfg *config.Config) error {
 	var dialector gorm.Dialector
 
-	if strings.Contains(cfg.DatabaseURL, "sqlite") {
+	switch {
+	case strings.Contains(cfg.DatabaseURL, "sqlite"), strings.Contains(cfg.DatabaseURL, "sqlite3"):
 		dialector = sqlite.Open(cfg.DatabaseURL)
-	} else {
+	case strings.Contains(cfg.DatabaseURL, "mysql"), strings.Contains(cfg.DatabaseURL, "mariadb"):
+		dialector = mysql.Open(cfg.DatabaseURL)
+	case strings.Contains(cfg.DatabaseURL, "postgres"):
+		return fmt.Errorf("database: PostgreSQL not yet supported, use MySQL or SQLite")
+	default:
 		dialector = mysql.Open(cfg.DatabaseURL)
 	}
 
@@ -61,7 +66,6 @@ func initDB(cfg *config.Config) error {
 		return fmt.Errorf("database: failed after 3 retries: %w", err)
 	}
 
-	// Connection pool
 	sqlDB, err := db.DB()
 	if err != nil {
 		return fmt.Errorf("database: sql.DB: %w", err)
@@ -78,7 +82,9 @@ func initDB(cfg *config.Config) error {
 			"PRAGMA busy_timeout=20000",
 			"PRAGMA foreign_keys=ON",
 		} {
-			db.Exec(pragma)
+			if err := db.Exec(pragma).Error; err != nil {
+				log.Printf("SQLite pragma %s failed: %v", pragma, err)
+			}
 		}
 	}
 
@@ -90,13 +96,12 @@ func initDB(cfg *config.Config) error {
 	return nil
 }
 
-// WithContext returns *gorm.DB with context (with nil guard).
-func WithContext(ctx interface{}) *gorm.DB {
+// Ctx returns *gorm.DB with context (nil-safe).
+func Ctx(ctx context.Context) *gorm.DB {
 	mu.RLock()
 	defer mu.RUnlock()
 	if DB == nil {
-		log.Println("WARNING: database.DB is nil — Init() not called or failed")
 		return nil
 	}
-	return DB
+	return DB.WithContext(ctx)
 }
