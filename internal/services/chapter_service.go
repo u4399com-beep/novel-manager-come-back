@@ -286,6 +286,8 @@ func WriteContentFile(novelID, chapterID, content string) (string, error) {
 }
 
 func ReadContentFile(contentFile string) (string, error) {
+	// Strip legacy "content/" prefix from Python-migrated data
+	contentFile = strings.TrimPrefix(contentFile, "content/")
 	path := filepath.Join(contentDir, contentFile)
 	if !strings.HasPrefix(filepath.Clean(path), filepath.Clean(contentDir)) {
 		return "", fmt.Errorf("path traversal detected")
