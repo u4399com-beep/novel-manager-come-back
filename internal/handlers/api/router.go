@@ -53,6 +53,7 @@ func (r *Router) Register(mux *http.ServeMux) {
 		if !r.requireAuthBool(w, req) { return }
 		path := strings.TrimPrefix(req.URL.Path, r.cfg.APIPrefix+"/rules/")
 		if path == "test" { r.handleRuleTest(w, req); return }
+		if path == "import" { r.handleRuleImport(w, req); return }
 		r.handleRuleByID(w, req)
 	})
 	mux.Handle(p+"/cache/health", auth(http.HandlerFunc(r.handleCacheHealth)))
