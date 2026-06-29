@@ -2,6 +2,7 @@ package site
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -65,9 +66,38 @@ func (r *Router) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/search", r.search)
 }
 
+// resolveSite looks up the current Site by request Host header.
+func (r *Router) resolveSite(req *http.Request) *models.Site {
+	host := req.Host
+	if idx := strings.Index(host, ":"); idx != -1 { host = host[:idx] }
+	var s models.Site
+	err := database.Pool.QueryRow(req.Context(),
+		"SELECT id,domain,name,template,offset_val,description,is_active,translate_enabled,language,url_patterns,chapter_pagination,link_wheel,recommend_modules,created_at,updated_at FROM sites WHERE domain=$1 AND is_active=true LIMIT 1", host).
+		Scan(&s.ID, &s.Domain, &s.Name, &s.Template, &s.Offset, &s.Description, &s.IsActive, &s.TranslateEnabled, &s.Language, &s.URLPatterns, &s.ChapterPagination, &s.LinkWheel, &s.RecommendModules, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil { return nil }
+	return &s
+}
+
+// siteModules parses recommend_modules JSON for template use.
+func siteModules(s *models.Site, page, module string) bool {
+	if s == nil || s.RecommendModules == "" || s.RecommendModules == "{}" { return true }
+	var mods map[string]map[string]map[string]interface{}
+	json.Unmarshal([]byte(s.RecommendModules), &mods)
+	if mods == nil { return true }
+	pageMods, ok := mods[page]
+	if !ok { return true }
+	mod, ok := pageMods[module]
+	if !ok { return true }
+	if enabled, ok := mod["enabled"]; ok {
+		if b, ok := enabled.(bool); ok { return b }
+	}
+	return true
+}
+
 func (r *Router) home(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path != "/" { http.NotFound(w, req); return }
 	ctx := req.Context()
+	site := r.resolveSite(req)
 
 	cats, _ := queryCategories(ctx)
 	catRecs := queryCatRecs(ctx, cats)
@@ -80,6 +110,13 @@ func (r *Router) home(w http.ResponseWriter, req *http.Request) {
 	r.render(w, "home.html", map[string]interface{}{
 		"Title":"归来小说CMS - 首页","CatRecs":catRecs,"LatestList":listItems,
 		"Ranking":ranking,"Featured":safeSlice(ranking,5),"Categories":cats,"Total":total,
+		"Site": site,
+		"ShowHero": siteModules(site, "home", "hero_carousel"),
+		"ShowCatSections": siteModules(site, "home", "category_sections"),
+		"ShowLatest": siteModules(site, "home", "latest_updates"),
+		"ShowRanking": siteModules(site, "home", "hot_ranking"),
+		"ShowFriendLinks": siteModules(site, "home", "friend_links"),
+		"ShowLinkWheel": siteModules(site, "home", "link_wheel"),
 	})
 }
 
@@ -259,7 +296,11 @@ func buildLatestList(ctx context.Context, novels []models.Novel) []map[string]in
 
 func (r *Router) render(w http.ResponseWriter, name string, data map[string]interface{}) {
 	if r.templates == nil { http.Error(w, "Template error", http.StatusInternalServerError); return }
-	data["SiteName"]="归来小说CMS"; data["Lang"]="zh"
+	siteName := "归来小说CMS"
+	if s, ok := data["Site"]; ok && s != nil {
+		if site, ok2 := s.(*models.Site); ok2 && site.Name != "" { siteName = site.Name }
+	}
+	data["SiteName"] = siteName; data["Lang"] = "zh"
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	r.templates.ExecuteTemplate(w, name, data)
 }
