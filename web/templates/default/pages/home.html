@@ -69,20 +69,24 @@
       <section class="home-section">
         <div class="section-header">
           <h2>🔥 最新更新</h2>
-          <a href="/novels" class="more-link">查看更多 →</a>
+          <div class="section-tabs">
+            <a href="/novels" class="more-link">全部 →</a>
+          </div>
         </div>
-        <div class="novel-grid-vertical">
+        <div class="update-grid">
           {{range .Novels}}
-          <a href="/novel/{{.ID}}" class="novel-card-h">
-            <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="lazy">
-            <div class="card-body">
-              <h3>{{.Title}}</h3>
-              <p class="card-author">{{.Author}}</p>
-              <p class="card-desc">{{truncate .Description 80}}</p>
-              <div class="card-meta">
-                <span class="tag-sm">{{statusLabel .Status}}</span>
-                <span>{{.TotalChapters}} 章</span>
+          <a href="/novel/{{.ID}}" class="update-card">
+            <div class="update-cover">
+              <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="lazy">
+              <div class="update-overlay">
+                <span class="update-status status-{{.Status}}">{{statusLabel .Status}}</span>
+                <span class="update-chapters">{{.TotalChapters}} 章</span>
               </div>
+            </div>
+            <div class="update-info">
+              <h3 title="{{.Title}}">{{.Title}}</h3>
+              <p class="update-author">{{or .Author "未知作者"}}</p>
+              <p class="update-desc">{{truncate .Description 60}}</p>
             </div>
           </a>
           {{end}}
