@@ -146,10 +146,15 @@ a:hover{color:var(--primary)}
 .novel-description h2{font-size:16px;margin-bottom:8px}
 .novel-description p{font-size:14px;color:var(--text-secondary);line-height:1.8}
 .recent-chapters{background:var(--card-bg);padding:20px;border-radius:var(--radius);box-shadow:var(--shadow)}
-.recent-chapters h2{font-size:16px;margin-bottom:12px}
-.recent-chapters ul{list-style:none}
-.recent-chapters li{padding:7px 0;border-bottom:1px solid #f3f4f6}
-.recent-chapters li a{font-size:14px}
+.recent-chapters h2{font-size:16px;margin-bottom:16px}
+.recent-chapter-grid{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:4px 20px;padding:0;counter-reset:rc}
+.recent-chapter-grid li{counter-increment:rc;padding:8px 0;border-bottom:1px dashed #f0f0f0;display:flex;align-items:baseline;gap:6px}
+.recent-chapter-grid li::before{content:counter(rc);font-size:11px;color:var(--text-light);font-weight:500;min-width:22px;flex-shrink:0}
+.recent-chapter-grid li a{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.recent-chapter-grid li:nth-child(-n+3){border-top:none}
+.recent-chapter-grid li:nth-child(3n+1){border-right:1px solid #f3f4f6;padding-right:14px}
+@media(max-width:768px){.recent-chapter-grid{grid-template-columns:repeat(2,1fr)}.recent-chapter-grid li:nth-child(3n+1){border-right:none}}
+@media(max-width:480px){.recent-chapter-grid{grid-template-columns:1fr}}
 
 /* Chapter List */
 .chapter-list-header{background:var(--card-bg);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}

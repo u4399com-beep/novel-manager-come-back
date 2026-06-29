@@ -38,11 +38,11 @@
 
   <section class="recent-chapters">
     <h2>最新章节</h2>
-    <ul>
+    <ol class="recent-chapter-grid">
       {{range .Chapters}}
       <li><a href="/chapter/{{.ID}}">{{.Title}}</a></li>
       {{end}}
-    </ul>
+    </ol>
     <a href="/novel/{{.Novel.ID}}/chapters" class="btn">查看全部章节</a>
   </section>
 </main>
