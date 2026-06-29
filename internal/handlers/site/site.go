@@ -103,24 +103,43 @@ type homeNovelItem struct {
 	UpdatedMMDD     string
 }
 
+// catGroup holds novels for a category recommendation block.
+type catGroup struct {
+	Category models.Category
+	Novels   []models.Novel
+}
+
 func (r *Router) handleHome(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path != "/" {
 		http.NotFound(w, req); return
 	}
 
-	const homeFetchCount = 42
-	var homeNovels []models.Novel
-	database.DB.Preload("Categories").Order("updated_at DESC").Limit(homeFetchCount).Find(&homeNovels)
+	// ── Categories ──
+	var categories []models.Category
+	database.DB.Order("sort_order ASC").Find(&categories)
 
-	var gridCards, latestList []models.Novel
-	if len(homeNovels) > 12 {
-		gridCards = homeNovels[:12]
-		latestList = homeNovels[12:]
-	} else {
-		gridCards = homeNovels
+	// ── Category Recommendations: top 6 categories, 4 novels each ──
+	catRecs := make([]catGroup, 0)
+	for i, cat := range categories {
+		if i >= 6 {
+			break
+		}
+		var novels []models.Novel
+		database.DB.Preload("Categories").
+			Joins("JOIN novel_categories nc ON nc.novel_id = novels.id").
+			Where("nc.category_id = ?", cat.ID).
+			Order("novels.total_chapters DESC").
+			Limit(4).
+			Find(&novels)
+		if len(novels) > 0 {
+			catRecs = append(catRecs, catGroup{Category: cat, Novels: novels})
+		}
 	}
 
-	// Batch fetch latest chapter titles + IDs for the list
+	// ── Latest Updates: 30 novels + latest chapters ──
+	var latestList []models.Novel
+	database.DB.Preload("Categories").Order("updated_at DESC").Limit(30).Find(&latestList)
+
 	type chInfo struct {
 		NovelID string
 		ID      string
@@ -146,7 +165,6 @@ func (r *Router) handleHome(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Build enriched items for template
 	listItems := make([]homeNovelItem, 0, len(latestList))
 	for _, n := range latestList {
 		catName := ""
@@ -159,26 +177,22 @@ func (r *Router) handleHome(w http.ResponseWriter, req *http.Request) {
 		}
 		ch := latestChMap[n.ID]
 		listItems = append(listItems, homeNovelItem{
-			Novel:           n,
-			CategoryName:    catName,
-			LatestChapter:   ch.Title,
-			LatestChapterID: ch.ID,
-			UpdatedMMDD:     mmdd,
+			Novel: n, CategoryName: catName,
+			LatestChapter: ch.Title, LatestChapterID: ch.ID,
+			UpdatedMMDD: mmdd,
 		})
 	}
+
+	// ── Ranking + Featured ──
+	var ranking []models.Novel
+	database.DB.Preload("Categories").Order("total_chapters DESC").Limit(15).Find(&ranking)
 
 	var total int64
 	database.DB.Model(&models.Novel{}).Count(&total)
 
-	var ranking []models.Novel
-	database.DB.Preload("Categories").Order("total_chapters DESC").Limit(15).Find(&ranking)
-
-	var categories []models.Category
-	database.DB.Order("sort_order ASC").Find(&categories)
-
 	r.render(w, "home.html", map[string]interface{}{
 		"Title":      "归来小说CMS - 首页",
-		"GridCards":  gridCards,
+		"CatRecs":    catRecs,
 		"LatestList": listItems,
 		"Ranking":    ranking,
 		"Featured":   safeSlice(ranking, 5),

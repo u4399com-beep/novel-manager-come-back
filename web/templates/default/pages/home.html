@@ -65,17 +65,16 @@
   <div class="container home-layout">
     <!-- Main Content -->
     <div class="home-main">
-      <!-- Hot Updates -->
+      <!-- Category Recommendations -->
+      {{if .CatRecs}}
+      {{range .CatRecs}}
       <section class="home-section">
         <div class="section-header">
-          <h2>🔥 最新更新</h2>
-          <a href="/novels" class="more-link">全部 →</a>
+          <h2>📂 {{.Category.Name}}</h2>
+          <a href="/novels?category={{.Category.ID}}" class="more-link">更多 {{.Category.Name}} →</a>
         </div>
-
-        <!-- Top 12 Cover Cards (2 rows × 6) -->
-        {{if .GridCards}}
         <div class="update-grid">
-          {{range .GridCards}}
+          {{range .Novels}}
           <a href="/novel/{{.ID}}" class="update-card">
             <div class="update-cover">
               <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="lazy">
@@ -91,10 +90,17 @@
           </a>
           {{end}}
         </div>
-        {{end}}
+      </section>
+      {{end}}
+      {{end}}
 
-        <!-- Latest 30 — 5-Column Table -->
-        {{if .LatestList}}
+      <!-- Latest Updates — 5-Column Table -->
+      {{if .LatestList}}
+      <section class="home-section">
+        <div class="section-header">
+          <h2>🔥 最新更新</h2>
+          <a href="/novels" class="more-link">全部 →</a>
+        </div>
         <div class="latest-table-wrap">
           <table class="latest-table">
             <thead>
@@ -119,8 +125,8 @@
             </tbody>
           </table>
         </div>
-        {{end}}
       </section>
+      {{end}}
     </div>
 
     <!-- Sidebar -->
