@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"github.com/u4399com-beep/novel-manager-come-back/internal/config"
-	"github.com/u4399com-beep/novel-manager-come-back/internal/database"
-	"github.com/u4399com-beep/novel-manager-come-back/internal/models"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/services"
 )
 
@@ -52,13 +50,6 @@ func AuthRequired(cfg *config.Config) func(http.Handler) http.Handler {
 			role, _ := claims["role"].(string)
 			if userID == "" {
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-				return
-			}
-
-			// Verify user is still active (not deactivated after token issuance)
-			var user models.User
-			if err := database.DB.Where("id = ? AND is_active = ?", userID, true).First(&user).Error; err != nil {
-				http.Error(w, `{"error":"user deactivated"}`, http.StatusForbidden)
 				return
 			}
 

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>API Test</title></head>
+<body>
+<h2>API 连通性测试</h2>
+<div id="result" style="font-family:monospace;white-space:pre-wrap"></div>
+<script>
+var out = document.getElementById('result');
+function log(msg) { out.textContent += msg + '\n'; }
+
+log('1. 检查token...');
+var t = localStorage.getItem('atok');
+log('   token: ' + (t ? t.substring(0,30)+'...' : 'NULL - 未登录!'));
+
+if (!t) {
+  log('\n请先在 http://localhost:8080/admin/ 登录后再刷新此页');
+} else {
+  log('\n2. 调用API...');
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/api/v1/categories');
+  xhr.setRequestHeader('Authorization', 'Bearer ' + t);
+  xhr.onload = function() {
+    log('   状态: ' + xhr.status);
+    if (xhr.status === 200) {
+      var data = JSON.parse(xhr.responseText);
+      log('   分类数: ' + data.length);
+      data.forEach(function(c) { log('     ' + c.id + ': ' + c.name); });
+      log('\n✅ API正常! 问题在Element Plus/Vue渲染层');
+    } else {
+      log('   ❌ API错误: ' + xhr.responseText);
+      log('\n问题在API层: HTTP ' + xhr.status);
+    }
+  };
+  xhr.onerror = function() {
+    log('   ❌ 网络错误!');
+  };
+  xhr.send();
+}
+</script>
+</body>
+</html>
