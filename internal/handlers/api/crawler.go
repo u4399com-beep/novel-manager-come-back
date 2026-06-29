@@ -79,9 +79,12 @@ func (r *Router) handleCrawlTasks(w http.ResponseWriter, req *http.Request) {
 	db.Count(&total)
 	db.Order("created_at DESC").Offset((page - 1) * size).Limit(size).Find(&tasks)
 
-	pages := max(1, int(total)/size)
-	if int(total)%size > 0 {
-		pages++
+	pages := 0
+	if total > 0 {
+		pages = int(total) / size
+		if int(total)%size > 0 {
+			pages++
+		}
 	}
 	writeOK(w, map[string]interface{}{
 		"items": tasks, "total": total, "page": page, "size": size, "pages": pages,

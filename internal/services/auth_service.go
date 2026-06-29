@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -66,15 +67,10 @@ func ParseAccessToken(cfg *config.Config, tokenStr string) (jwt.MapClaims, error
 }
 
 // RegisterUser creates a new user account.
+// Uses database unique constraint as the ultimate guard against race conditions.
 func RegisterUser(username, email, password string) (*models.User, error) {
 	if len(password) < minPasswordLen {
 		return nil, ErrPasswordTooShort
-	}
-
-	var count int64
-	database.DB.Model(&models.User{}).Where("username = ? OR email = ?", username, email).Count(&count)
-	if count > 0 {
-		return nil, ErrUserExists
 	}
 
 	hashed, err := HashPassword(password)
@@ -87,10 +83,26 @@ func RegisterUser(username, email, password string) (*models.User, error) {
 		Email:          email,
 		HashedPassword: hashed,
 	}
+
+	// Rely on DB unique constraint for atomicity (not Go-level count check)
 	if err := database.DB.Create(user).Error; err != nil {
+		if isDuplicateKeyError(err) {
+			return nil, ErrUserExists
+		}
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 	return user, nil
+}
+
+// isDuplicateKeyError checks if the error is a MySQL/SQLite duplicate key violation.
+func isDuplicateKeyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "UNIQUE constraint") ||
+		strings.Contains(msg, "Duplicate entry") ||
+		strings.Contains(msg, "duplicate key")
 }
 
 // AuthenticateUser verifies credentials and returns the user.

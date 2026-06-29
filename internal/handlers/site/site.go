@@ -4,7 +4,6 @@ package site
 import (
 	"html/template"
 	"log"
-	"math"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -117,7 +116,7 @@ func (r *Router) handleHome(w http.ResponseWriter, req *http.Request) {
 		"Featured":   safeSlice(ranking, 5),
 		"Categories": categories,
 		"Page":       page, "Total": total,
-		"Pages": max(1, int(math.Ceil(float64(total)/float64(size)))),
+		"Pages": pagesFromTotal(total, size),
 	})
 }
 
@@ -151,7 +150,7 @@ func (r *Router) handleBookLibrary(w http.ResponseWriter, req *http.Request) {
 	r.render(w, "home.html", map[string]interface{}{
 		"Title": "归来小说CMS - 书库", "Novels": novels,
 		"Categories": categories, "Page": page, "Total": total,
-		"Pages":    max(1, int(math.Ceil(float64(total)/float64(size)))),
+		"Pages":    pagesFromTotal(total, size),
 		"Featured": safeSlice(novels, 5), "Ranking": safeSlice(novels, 15),
 	})
 }
@@ -271,4 +270,15 @@ func safeSlice(s []models.Novel, n int) []models.Novel {
 		return s
 	}
 	return s[:n]
+}
+
+func pagesFromTotal(total int64, size int) int {
+	if total == 0 {
+		return 0
+	}
+	p := int(total) / size
+	if int(total)%size > 0 {
+		p++
+	}
+	return p
 }

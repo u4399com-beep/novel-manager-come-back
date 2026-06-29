@@ -67,6 +67,12 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	body.Username = strings.TrimSpace(body.Username)
+	if body.Username == "" || body.Password == "" {
+		writeError(w, http.StatusBadRequest, "username and password required")
+		return
+	}
+
 	user, err := services.AuthenticateUser(body.Username, body.Password)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid credentials")

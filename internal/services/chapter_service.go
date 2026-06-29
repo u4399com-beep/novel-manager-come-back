@@ -188,18 +188,20 @@ func BatchCreateChapters(novelID string, chaptersData []map[string]interface{}) 
 		return nil, err
 	}
 
-	// Write content files in background (fire-and-forget with error logging)
+	// Write content files asynchronously (each goroutine creates its own DB session)
 	var wg sync.WaitGroup
 	for i := range chapters {
 		if content, ok := chaptersData[i]["content"].(string); ok && content != "" {
 			wg.Add(1)
-			go func(idx int, novelID, chapterID, txt string) {
+			go func(chapterID, novelID, txt string) {
 				defer wg.Done()
 				if cf, err := WriteContentFile(novelID, chapterID, txt); err == nil {
-					database.DB.Model(&models.Chapter{}).Where("id = ?", chapterID).
+					// Each goroutine uses a fresh GORM session (safe for concurrent use)
+					database.DB.Session(&gorm.Session{}).
+						Model(&models.Chapter{}).Where("id = ?", chapterID).
 						Update("content_file", cf)
 				}
-			}(i, novelID, chapters[i].ID, content)
+			}(chapters[i].ID, novelID, content)
 		}
 	}
 	wg.Wait()

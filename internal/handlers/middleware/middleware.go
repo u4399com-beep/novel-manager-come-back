@@ -5,12 +5,16 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/u4399com-beep/novel-manager-come-back/internal/config"
+	"github.com/u4399com-beep/novel-manager-come-back/internal/database"
+	"github.com/u4399com-beep/novel-manager-come-back/internal/models"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/services"
 )
 
@@ -19,32 +23,45 @@ type contextKey string
 const (
 	UserIDKey   contextKey = "user_id"
 	UserRoleKey contextKey = "user_role"
-	MaxBodySize int64      = 1 << 20 // 1 MB
+	MaxBodySize int64      = 1 << 20
 )
 
-const maxRateLimitBuckets = 100000
+const (
+	maxRateBuckets    = 100000
+	rateCleanInterval = 5 * time.Minute
+	defaultRateLimit  = 100
+	defaultRateWindow = 60
+)
 
-// ── Auth ─────────────────────────────────────────────────────────────────────
+// ── Auth (with deactivated-user check) ─────────────────────────────────────
 
 func AuthRequired(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ah := r.Header.Get("Authorization")
 			if ah == "" || !strings.HasPrefix(ah, "Bearer ") {
-				http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
+				http.Error(w, `{"error":"auth required"}`, http.StatusUnauthorized)
 				return
 			}
 			claims, err := services.ParseAccessToken(cfg, strings.TrimPrefix(ah, "Bearer "))
 			if err != nil {
-				http.Error(w, `{"error":"invalid or expired token"}`, http.StatusUnauthorized)
+				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
 			}
 			userID, _ := claims["sub"].(string)
 			role, _ := claims["role"].(string)
 			if userID == "" {
-				http.Error(w, `{"error":"invalid token claims"}`, http.StatusUnauthorized)
+				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
 			}
+
+			// Verify user is still active (not deactivated after token issuance)
+			var user models.User
+			if err := database.DB.Where("id = ? AND is_active = ?", userID, true).First(&user).Error; err != nil {
+				http.Error(w, `{"error":"user deactivated"}`, http.StatusForbidden)
+				return
+			}
+
 			ctx := context.WithValue(r.Context(), UserIDKey, userID)
 			ctx = context.WithValue(ctx, UserRoleKey, role)
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -52,11 +69,18 @@ func AuthRequired(cfg *config.Config) func(http.Handler) http.Handler {
 	}
 }
 
-// ── Rate Limiter (token bucket with refill) ─────────────────────────────────
+// ── Rate Limiter (sharded token bucket) ───────────────────────────────────
+
+const shardCount = 64
 
 type RateLimit struct {
-	rate    float64 // tokens per second
-	burst   int     // max tokens
+	rate    float64
+	burst   int
+	shards  [shardCount]*rateShard
+	closeCh chan struct{}
+}
+
+type rateShard struct {
 	mu      sync.Mutex
 	buckets map[string]*tokenBucket
 }
@@ -66,64 +90,80 @@ type tokenBucket struct {
 	lastSeen time.Time
 }
 
-func NewRateLimit(maxRequests int, windowSeconds int) *RateLimit {
+func NewRateLimit(maxRequests, windowSecs int) *RateLimit {
 	rl := &RateLimit{
-		rate:    float64(maxRequests) / float64(windowSeconds),
+		rate:    float64(maxRequests) / float64(windowSecs),
 		burst:   maxRequests,
-		buckets: make(map[string]*tokenBucket),
+		closeCh: make(chan struct{}),
 	}
-	go rl.periodicCleanup(5 * time.Minute)
+	for i := range rl.shards {
+		rl.shards[i] = &rateShard{buckets: make(map[string]*tokenBucket)}
+	}
+	go rl.cleanupLoop()
 	return rl
 }
 
-func (rl *RateLimit) periodicCleanup(interval time.Duration) {
+func (rl *RateLimit) cleanupLoop() {
+	t := time.NewTicker(rateCleanInterval)
+	defer t.Stop()
 	for {
-		time.Sleep(interval)
-		rl.cleanup()
+		select {
+		case <-t.C:
+			rl.cleanup()
+		case <-rl.closeCh:
+			return
+		}
 	}
 }
 
 func (rl *RateLimit) cleanup() {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	cutoff := time.Now().Add(-5 * time.Minute)
-	for ip, b := range rl.buckets {
-		if b.lastSeen.Before(cutoff) {
-			delete(rl.buckets, ip)
-		}
-	}
-	if len(rl.buckets) > maxRateLimitBuckets {
-		excess := len(rl.buckets) - maxRateLimitBuckets/2
-		for ip := range rl.buckets {
-			if excess <= 0 {
-				break
+	cutoff := time.Now().Add(-rateCleanInterval)
+	for _, s := range rl.shards {
+		s.mu.Lock()
+		for ip, b := range s.buckets {
+			if b.lastSeen.Before(cutoff) {
+				delete(s.buckets, ip)
 			}
-			delete(rl.buckets, ip)
-			excess--
 		}
-		log.Printf("RateLimit: hard eviction (%d buckets)", len(rl.buckets))
+		// Hard eviction
+		if len(s.buckets) > maxRateBuckets/shardCount {
+			excess := len(s.buckets) - maxRateBuckets/shardCount/2
+			for ip := range s.buckets {
+				if excess <= 0 {
+					break
+				}
+				delete(s.buckets, ip)
+				excess--
+			}
+		}
+		s.mu.Unlock()
 	}
 }
 
+func (rl *RateLimit) Stop() {
+	close(rl.closeCh)
+}
+
 func (rl *RateLimit) allow(ip string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
+	idx := fnvHash(ip) % shardCount
+	s := rl.shards[idx]
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	now := time.Now()
-	b, ok := rl.buckets[ip]
+	b, ok := s.buckets[ip]
 	if !ok {
-		rl.buckets[ip] = &tokenBucket{tokens: float64(rl.burst) - 1, lastSeen: now}
+		s.buckets[ip] = &tokenBucket{tokens: float64(rl.burst) - 1, lastSeen: now}
 		return true
 	}
-
-	// Refill tokens based on elapsed time
+	// Refill
 	elapsed := now.Sub(b.lastSeen).Seconds()
 	b.tokens += elapsed * rl.rate
 	if b.tokens > float64(rl.burst) {
 		b.tokens = float64(rl.burst)
 	}
 	b.lastSeen = now
-
 	if b.tokens >= 1 {
 		b.tokens--
 		return true
@@ -151,7 +191,7 @@ func LimitBodySize(maxSize int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.ContentLength > maxSize {
-				http.Error(w, `{"error":"request body too large"}`, http.StatusRequestEntityTooLarge)
+				http.Error(w, `{"error":"body too large"}`, http.StatusRequestEntityTooLarge)
 				return
 			}
 			r.Body = http.MaxBytesReader(w, r.Body, maxSize)
@@ -169,8 +209,7 @@ func CORSMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			origin := r.Header.Get("Origin")
-			if allowSet[origin] {
+			if origin := r.Header.Get("Origin"); allowSet[origin] {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
 				w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,PATCH,OPTIONS")
@@ -215,19 +254,46 @@ func RequestID(next http.Handler) http.Handler {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// clientIP extracts the real client IP with IPv6 support.
+// Uses net.SplitHostPort for proper address parsing.
+// Proxy headers are only trusted when TRUST_PROXY=true is set.
 func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if idx := strings.IndexByte(xff, ','); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
+	// Only trust proxy headers if explicitly enabled
+	if trustProxyHeaders() {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			if idx := strings.IndexByte(xff, ','); idx != -1 {
+				return strings.TrimSpace(xff[:idx])
+			}
+			return strings.TrimSpace(xff)
 		}
-		return strings.TrimSpace(xff)
+		if xri := r.Header.Get("X-Real-IP"); xri != "" {
+			return strings.TrimSpace(xri)
+		}
 	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-	host := r.RemoteAddr
-	if idx := strings.LastIndexByte(host, ':'); idx != -1 {
-		return host[:idx]
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// Fallback for malformed RemoteAddr
+		return r.RemoteAddr
 	}
 	return host
+}
+
+var proxyTrustOnce sync.Once
+var proxyTrusted bool
+
+func trustProxyHeaders() bool {
+	proxyTrustOnce.Do(func() {
+		v := strings.ToLower(strings.TrimSpace(os.Getenv("TRUST_PROXY")))
+		proxyTrusted = v == "true" || v == "1"
+	})
+	return proxyTrusted
+}
+
+func fnvHash(s string) uint32 {
+	h := uint32(2166136261)
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(s[i])
+		h *= 16777619
+	}
+	return h
 }

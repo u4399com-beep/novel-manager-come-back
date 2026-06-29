@@ -33,15 +33,22 @@ func Init(cfg *config.Config) error {
 }
 
 func initDB(cfg *config.Config) error {
+	isSQLite := false
 	var dialector gorm.Dialector
 
 	switch {
-	case strings.Contains(cfg.DatabaseURL, "sqlite"), strings.Contains(cfg.DatabaseURL, "sqlite3"):
-		dialector = sqlite.Open(cfg.DatabaseURL)
+	case strings.Contains(cfg.DatabaseURL, "sqlite"), strings.Contains(cfg.DatabaseURL, "sqlite3"),
+		!strings.Contains(cfg.DatabaseURL, "://"):
+		// SQLite: plain file path, file: prefix, or sqlite:// scheme
+		dsn := cfg.DatabaseURL
+		dsn = strings.TrimPrefix(dsn, "sqlite://")
+		dsn = strings.TrimPrefix(dsn, "sqlite3://")
+		dialector = sqlite.Open(dsn)
+		isSQLite = true
 	case strings.Contains(cfg.DatabaseURL, "mysql"), strings.Contains(cfg.DatabaseURL, "mariadb"):
 		dialector = mysql.Open(cfg.DatabaseURL)
 	case strings.Contains(cfg.DatabaseURL, "postgres"):
-		return fmt.Errorf("database: PostgreSQL not yet supported, use MySQL or SQLite")
+		return fmt.Errorf("database: PostgreSQL not yet supported")
 	default:
 		dialector = mysql.Open(cfg.DatabaseURL)
 	}
@@ -76,7 +83,7 @@ func initDB(cfg *config.Config) error {
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 
 	// SQLite pragmas
-	if strings.Contains(cfg.DatabaseURL, "sqlite") {
+	if isSQLite {
 		for _, pragma := range []string{
 			"PRAGMA journal_mode=WAL",
 			"PRAGMA busy_timeout=20000",
