@@ -1,0 +1,115 @@
+{
+  "source_name": "23qb",
+  "base_url": "https://www.23qb.net",
+  "description": "铅笔小说 (23qb.net) — 主要采集源",
+  "version": "2.0",
+  "selectors": {
+    "search": {
+      "url": "/search?keyword={keyword}",
+      "container": ".module-row-info",
+      "fields": {
+        "title": {"selector": ".module-row-title a", "attr": "title"},
+        "author": {"selector": ".module-row-opt .module-row-opt-item:nth-child(2) a"},
+        "url": {"selector": ".module-row-title a", "attr": "href"},
+        "book_id": {"selector": ".module-row-title a", "attr": "href", "transform": "regex:/book/(\\d+)"}
+      }
+    },
+    "novel_info": {
+      "container": ".novel-info",
+      "fields": {
+        "title": {"selector": "meta[property='og:novel:book_name']", "attr": "content", "fallback": "h1.page-title"},
+        "author": {"selector": "meta[property='og:novel:author']", "attr": "content", "fallback": ".novel-info-aux a[title]"},
+        "description": {"selector": "meta[property='og:description']", "attr": "content", "fallback": ".description"},
+        "cover_url": {"selector": "meta[property='og:image']", "attr": "content", "fallback": ".novel-cover img", "fallback_attr": "src"},
+        "status": {"selector": "meta[property='og:novel:status']", "attr": "content", "fallback": ".novel-info-aux span.status"},
+        "category_name": {"selector": "meta[property='og:novel:category']", "attr": "content", "fallback": ".novel-info-aux a[href*='/tag/']"}
+      }
+    },
+    "catalog": {
+      "container": ".module-row-info",
+      "fields": {
+        "title": {"selector": "a.module-row-text", "attr": "title", "fallback_text": true},
+        "url": {"selector": "a.module-row-text", "attr": "href"}
+      },
+      "volume_header": "h2.module-title.type",
+      "volume_exclude": "#shuqian"
+    },
+    "chapter": {
+      "container": ".view-heading .article-content, div.article-content",
+      "fields": {
+        "title": {"selector": "h1.page-title"},
+        "content": {"selector": ".article-content", "clean": true}
+      },
+      "remove_elements": ["script", "ins", ".adsbygoogle", ".ad_content"],
+      "content_clean": true
+    }
+  },
+  "options": {
+    "request_delay": 0.5,
+    "timeout": 60,
+    "max_concurrency": 10,
+    "encoding": "utf-8",
+    "catalog_url_template": "/book/{book_id}/catalog"
+  },
+  "cleaner": {
+    "enabled": true,
+    "remove_lines": [
+      "请收藏本站",
+      "天才一秒记住",
+      "一秒记住",
+      "笔趣阁",
+      "顶点小说",
+      "www.23qb.net",
+      "23qb.net",
+      "加入书签",
+      "投推荐票",
+      "求月票",
+      "求订阅",
+      "求收藏",
+      "如果您喜欢",
+      "各位书友",
+      "ps:",
+      "Ps:",
+      "PS:",
+      "pS:"
+    ],
+    "inline_remove": [
+      "【.*?】",
+      "\\(本章未完.*?\\)",
+      "（本章未完.*?）",
+      "温馨提示.*?请记住",
+      "手机用户请浏览.*?更优质的阅读体验"
+    ],
+    "min_line_length": 5,
+    "max_consecutive_short_lines": 3
+  },
+  "pagination": {
+    "type": "url_pattern",
+    "pattern": "/book/lastupdate_0_{sort}_0_0_0_0_0_{page}_0.html",
+    "page_param_position": -2,
+    "sort_options": {
+      "0": "更新时间",
+      "6": "总字数"
+    }
+  },
+  "status_map": {
+    "完结": "completed",
+    "连载": "ongoing",
+    "连载中": "ongoing"
+  },
+  "category_map": {
+    "1": "言情",
+    "2": "都市",
+    "3": "唯美", 
+    "4": "穿越",
+    "5": "青春",
+    "6": "玄幻",
+    "7": "武侠",
+    "8": "军事",
+    "9": "竞技",
+    "10": "科幻",
+    "11": "悬疑",
+    "12": "同人",
+    "13": "职场"
+  }
+}
