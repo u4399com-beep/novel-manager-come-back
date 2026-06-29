@@ -1,0 +1,47 @@
+{{define "search.html"}}<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{.Title}}</title>
+<link rel="stylesheet" href="/static/css/site.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="container">
+    <a href="/" class="logo">{{.SiteName}}</a>
+    <nav><a href="/">首页</a><a href="/novels">书库</a></nav>
+    <form action="/search" method="GET" class="search-form">
+      <input type="text" name="q" value="{{.Query}}" placeholder="搜索小说..." required>
+      <button type="submit">搜索</button>
+    </form>
+  </div>
+</header>
+
+<main class="container">
+  <h1>搜索结果{{if .Query}}: "{{.Query}}"{{end}}</h1>
+  <p>共找到 {{.Total}} 条结果</p>
+
+  <div class="novel-list">
+    {{range .Results}}
+    <div class="novel-row">
+      <a href="/novel/{{.ID}}" class="novel-cover-link">
+        <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="lazy">
+      </a>
+      <div class="novel-info">
+        <a href="/novel/{{.ID}}"><h3>{{.Title}}</h3></a>
+        <p class="author">{{.Author}}</p>
+        <p class="desc">{{truncate .Description 120}}</p>
+      </div>
+    </div>
+    {{else}}
+    <p class="no-results">未找到相关小说</p>
+    {{end}}
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container"><p>&copy; 2026 归来小说CMS</p></div>
+</footer>
+</body>
+</html>{{end}}

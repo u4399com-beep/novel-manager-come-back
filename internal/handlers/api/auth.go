@@ -1,0 +1,158 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/u4399com-beep/novel-manager-come-back/internal/handlers/middleware"
+	"github.com/u4399com-beep/novel-manager-come-back/internal/services"
+)
+
+// ── Auth ────────────────────────────────────────────────────────────────────
+
+func (r *Router) handleRegister(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+	var body struct {
+		Username string `json:"username"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if body.Username == "" || body.Password == "" {
+		writeError(w, http.StatusBadRequest, "username and password required")
+		return
+	}
+
+	user, err := services.RegisterUser(body.Username, body.Email, body.Password)
+	if err != nil {
+		if err == services.ErrUserExists {
+			writeError(w, http.StatusConflict, "user already exists")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	token, err := services.CreateAccessToken(r.cfg, user.ID, user.Role)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "token creation failed")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"access_token": token,
+		"token_type":   "bearer",
+		"user":         user,
+	})
+}
+
+func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+	var body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	user, err := services.AuthenticateUser(body.Username, body.Password)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+
+	token, err := services.CreateAccessToken(r.cfg, user.ID, user.Role)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "token creation failed")
+		return
+	}
+
+	writeOK(w, map[string]interface{}{
+		"access_token": token,
+		"token_type":   "bearer",
+		"user":         user,
+	})
+}
+
+func (r *Router) handleMe(w http.ResponseWriter, req *http.Request) {
+	userID, _ := req.Context().Value(middleware.UserIDKey).(string)
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+
+	if req.Method == http.MethodGet {
+		user, err := services.GetUserByID(userID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		writeOK(w, user)
+		return
+	}
+	writeError(w, http.StatusMethodNotAllowed, "GET required")
+}
+
+func (r *Router) handleUpdateMe(w http.ResponseWriter, req *http.Request) {
+	userID, _ := req.Context().Value(middleware.UserIDKey).(string)
+	if req.Method != http.MethodPut {
+		writeError(w, http.StatusMethodNotAllowed, "PUT required")
+		return
+	}
+	var updates map[string]interface{}
+	if err := json.NewDecoder(req.Body).Decode(&updates); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	user, err := services.UpdateUser(userID, updates)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, user)
+}
+
+// ── Search ──────────────────────────────────────────────────────────────────
+
+func (r *Router) handleSearch(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "GET required")
+		return
+	}
+	q := req.URL.Query().Get("q")
+	searchType := req.URL.Query().Get("type")
+	if searchType == "" {
+		searchType = "novel"
+	}
+
+	if q == "" {
+		writeOK(w, map[string]interface{}{
+			"items": []interface{}{}, "total": 0, "page": 1, "size": 20, "pages": 0,
+		})
+		return
+	}
+
+	if searchType == "novel" {
+		result, err := services.ListNovels(services.NovelListParams{
+			Page: 1, Size: 20, Search: q, SortBy: "updated_at", SortDir: "desc",
+		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeOK(w, result)
+		return
+	}
+	writeOK(w, map[string]interface{}{"items": []interface{}{}, "total": 0})
+}

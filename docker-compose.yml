@@ -1,0 +1,51 @@
+version: '3.8'
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: novel_come_back
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+
+  app:
+    build: .
+    ports:
+      - "8008:8008"
+    environment:
+      DATABASE_URL: "mysql://root:password@mysql:3306/novel_come_back?charset=utf8mb4&parseTime=true"
+      REDIS_URL: "redis://redis:6379/0"
+      SECRET_KEY: "change-me-in-production"
+      SERVER_PORT: "8008"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - content_data:/data/content
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
+  content_data:

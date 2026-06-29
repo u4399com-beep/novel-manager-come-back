@@ -1,0 +1,106 @@
+/* 归来小说CMS - Site Stylesheet */
+:root {
+  --primary: #1890ff;
+  --primary-dark: #096dd9;
+  --bg: #f5f7fa;
+  --card-bg: #fff;
+  --text: #333;
+  --text-secondary: #666;
+  --border: #e8e8e8;
+  --radius: 8px;
+  --shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif;color:var(--text);background:var(--bg);line-height:1.6}
+.container{max-width:1200px;margin:0 auto;padding:0 16px}
+a{color:var(--primary);text-decoration:none}
+a:hover{color:var(--primary-dark)}
+
+/* Header */
+.site-header{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06);position:sticky;top:0;z-index:100}
+.site-header .container{display:flex;align-items:center;height:56px;gap:24px}
+.logo{font-size:20px;font-weight:700;color:var(--primary);white-space:nowrap}
+.site-header nav{display:flex;gap:16px;flex:1}
+.site-header nav a{color:var(--text);font-size:14px}
+.site-header nav a:hover{color:var(--primary)}
+.search-form{display:flex;gap:4px}
+.search-form input{border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px;width:180px;font-size:14px}
+.search-form button{background:var(--primary);color:#fff;border:none;border-radius:var(--radius);padding:6px 12px;cursor:pointer;font-size:14px}
+
+/* Main */
+main{padding:24px 0;min-height:calc(100vh - 116px)}
+
+/* Featured */
+.featured-section h2,.latest-section h2,.categories-section h2{margin-bottom:16px;font-size:20px;border-left:3px solid var(--primary);padding-left:12px}
+.novel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;margin-bottom:32px}
+.novel-card{background:var(--card-bg);border-radius:var(--radius);padding:12px;text-align:center;box-shadow:var(--shadow);transition:transform .2s}
+.novel-card:hover{transform:translateY(-2px)}
+.novel-card img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:4px;margin-bottom:8px}
+.novel-card h3{font-size:14px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.novel-card p{font-size:12px;color:var(--text-secondary)}
+
+/* Category tags */
+.category-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:32px}
+.tag{display:inline-block;padding:4px 12px;background:var(--card-bg);border:1px solid var(--border);border-radius:16px;font-size:13px;color:var(--text);transition:all .2s}
+.tag:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+/* Novel list */
+.novel-list{margin-bottom:32px}
+.novel-row{display:flex;gap:16px;background:var(--card-bg);padding:16px;border-radius:var(--radius);margin-bottom:12px;box-shadow:var(--shadow)}
+.novel-row img{width:80px;height:106px;object-fit:cover;border-radius:4px;flex-shrink:0}
+.novel-info{flex:1;min-width:0}
+.novel-info h3{font-size:16px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.author{font-size:13px;color:var(--text-secondary)}
+.desc{font-size:13px;color:var(--text-secondary);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.novel-meta{flex-shrink:0;text-align:right;font-size:13px;color:var(--text-secondary);display:flex;flex-direction:column;gap:4px}
+
+/* Novel detail */
+.novel-detail .novel-header{display:flex;gap:24px;margin-bottom:24px}
+.novel-cover{width:200px;height:266px;object-fit:cover;border-radius:var(--radius);box-shadow:var(--shadow)}
+.novel-meta-info{flex:1}
+.novel-meta-info h1{font-size:28px;margin-bottom:8px}
+.novel-meta-info .author{font-size:16px;margin-bottom:12px}
+.novel-meta-info .tags{display:flex;gap:8px;margin-bottom:12px}
+.novel-meta-info .status{font-size:14px;color:var(--text-secondary);margin-bottom:16px}
+.btn{display:inline-block;padding:8px 16px;border-radius:var(--radius);font-size:14px;cursor:pointer;border:1px solid var(--border);background:var(--card-bg);color:var(--text)}
+.btn.primary{background:var(--primary);color:#fff;border:none}
+.btn:hover{opacity:.85}
+.novel-description{margin-bottom:24px}
+.recent-chapters ul{list-style:none;margin-bottom:16px}
+.recent-chapters li{padding:8px 0;border-bottom:1px solid var(--border)}
+.recent-chapters li a{font-size:14px}
+
+/* Chapter reader */
+.chapter-reader{max-width:800px}
+.chapter-nav{display:flex;justify-content:space-between;margin:16px 0}
+.chapter-nav .btn{font-size:14px}
+.chapter-reader h1{font-size:24px;text-align:center;margin:24px 0}
+.chapter-info{text-align:center;color:var(--text-secondary);margin-bottom:24px}
+.chapter-content{font-size:18px;line-height:2;text-align:justify}
+.chapter-content p{margin-bottom:12px;text-indent:2em}
+
+/* Pagination */
+.pagination{display:flex;justify-content:center;gap:8px}
+.pagination a{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:var(--radius);border:1px solid var(--border);font-size:14px}
+.pagination a.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+/* Ranking */
+.ranking-sidebar{float:right;width:280px;margin-left:24px;background:var(--card-bg);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.ranking-sidebar ol{padding-left:20px}
+.ranking-sidebar li{padding:4px 0;display:flex;justify-content:space-between}
+.ranking-sidebar li a{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
+.ranking-sidebar li span{color:var(--text-secondary);font-size:12px;flex-shrink:0}
+
+/* Footer */
+.site-footer{background:#fff;padding:16px 0;text-align:center;font-size:13px;color:var(--text-secondary);border-top:1px solid var(--border)}
+
+/* No results */
+.no-results{text-align:center;padding:60px 0;color:var(--text-secondary);font-size:16px}
+
+/* Responsive */
+@media(max-width:768px){
+  .novel-detail .novel-header{flex-direction:column;align-items:center;text-align:center}
+  .novel-cover{width:150px;height:200px}
+  .ranking-sidebar{float:none;width:auto;margin-left:0;margin-top:24px}
+  .search-form input{width:120px}
+}

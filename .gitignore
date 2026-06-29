@@ -1,0 +1,43 @@
+# Binary
+novel-server
+novel-come-back
+*.exe
+
+# Dependencies
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Environment
+.env
+*.env.local
+
+# Temp
+/tmp/
+*.log
+*.pid
+
+# Test
+coverage.out
+coverage.html
+
+# Docker
+.docker/
+
+# Static uploads
+web/static/covers/*
+!web/static/covers/.gitkeep
