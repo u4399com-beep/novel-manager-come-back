@@ -44,6 +44,17 @@ func (r *Router) Register(mux *http.ServeMux) {
 	mux.Handle(p+"/sites/", auth(http.HandlerFunc(r.handleSiteByID)))
 	mux.Handle(p+"/link-rings", auth(http.HandlerFunc(r.handleLinkRings)))
 	mux.Handle(p+"/link-rings/", auth(http.HandlerFunc(r.handleLinkRingByID)))
+	mux.HandleFunc(p+"/rules", func(w http.ResponseWriter, req *http.Request) {
+		// Check token first (simple auth)
+		if !r.requireAuthBool(w, req) { return }
+		r.handleRulesList(w, req)
+	})
+	mux.HandleFunc(p+"/rules/", func(w http.ResponseWriter, req *http.Request) {
+		if !r.requireAuthBool(w, req) { return }
+		path := strings.TrimPrefix(req.URL.Path, r.cfg.APIPrefix+"/rules/")
+		if path == "test" { r.handleRuleTest(w, req); return }
+		r.handleRuleByID(w, req)
+	})
 	mux.Handle(p+"/cache/health", auth(http.HandlerFunc(r.handleCacheHealth)))
 	mux.Handle(p+"/cache/flush", auth(http.HandlerFunc(r.handleCacheFlush)))
 	mux.Handle(p+"/repair/status", auth(http.HandlerFunc(r.handleRepairStatus)))
@@ -76,6 +87,12 @@ func (r *Router) handleNovelsRouting(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	r.routeNovelsPrefix(w, req)
+}
+
+// requireAuthBool checks JWT and returns true if valid (for HandleFunc wrappers).
+func (r *Router) requireAuthBool(w http.ResponseWriter, req *http.Request) bool {
+	_, ok := r.requireAuth(w, req)
+	return ok
 }
 
 // requireAuth validates JWT and injects user info into context (mirrors middleware.AuthRequired).

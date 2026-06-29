@@ -97,6 +97,7 @@ const MainLayout = {
       { path: '/crawler', label: '采集任务', icon: '🕷️' },
       { path: '/sites', label: '站点管理', icon: '🌐' },
       { path: '/link-rings', label: '链轮管理', icon: '🔗' },
+      { path: '/rules', label: '采集规则', icon: '📝' },
       { path: '/cache', label: '缓存运维', icon: '🗄️' },
     ];
     const navigate = (path) => router.push(path);
@@ -597,6 +598,65 @@ const LinkRings = {
   }
 };
 
+
+// ── RuleEditor ─────────────────────────────────────────────────────────────
+const RuleEditor = {
+  template: `
+  <div>
+    <div class="page-header"><h2>📝 采集规则</h2></div>
+    <div style="display:flex;gap:16px">
+      <div class="card" style="width:280px;flex-shrink:0">
+        <h3>规则列表</h3>
+        <div v-for="r in rules" :key="r.source_name" @click="selectRule(r.source_name)" 
+          style="padding:8px 12px;margin:4px 0;border-radius:6px;cursor:pointer;font-size:13px"
+          :style="{background: selected===r.source_name?'var(--primary-light)':'',color:selected===r.source_name?'var(--primary)':''}">
+          <strong>{{r.source_name}}</strong>
+          <div style="font-size:11px;color:#909399">{{r.base_url||''}} {{r.description||''}}</div>
+        </div>
+        <el-button size="small" @click="createRule" style="margin-top:8px;width:100%">+ 新建规则</el-button>
+        <div style="margin-top:12px"><h4 style="font-size:13px;margin-bottom:6px">模板</h4>
+          <el-button size="small" v-for="t in templates" :key="t.name" @click="insertTemplate(t)" style="margin:2px">{{t.name}}</el-button>
+        </div>
+      </div>
+      <div class="card" style="flex:1">
+        <div class="toolbar"><div><el-tag size="small" :type="modified?'warning':'success'">{{modified?'已修改':'已保存'}}</el-tag></div>
+          <div><el-button size="small" @click="formatJSON">格式化</el-button><el-button size="small" type="primary" @click="saveRule" :loading="saving">保存</el-button>
+          <el-popconfirm title="确定删除?" @confirm="deleteRule"><template #reference><el-button size="small" type="danger">删除</el-button></template></el-popconfirm></div>
+        </div>
+        <textarea v-model="jsonText" style="width:100%;height:400px;font-family:monospace;font-size:12px;border:1px solid #e4e7ed;border-radius:6px;padding:10px;resize:vertical" @keydown="onKeydown"></textarea>
+        <div v-if="jsonError" style="color:#f56c6c;font-size:12px;margin-top:4px">⚠ {{jsonError}}</div>
+        <div style="margin-top:8px;font-size:11px;color:#909399">Ctrl+S 保存 | Tab 缩进</div>
+      </div>
+    </div>
+  </div>`,
+  setup() {
+    const rules = ref([]); const selected = ref(''); const jsonText = ref('{}'); const saving = ref(false);
+    const modified = ref(false); const jsonError = ref(''); const origJson = ref('');
+    const templates = [
+      {name:'搜索',section:'search',json:'{"search":{"url":"/search?keyword={keyword}","container":".item","fields":{"title":{"selector":"h3 a"},"author":{"selector":".author"},"url":{"selector":"h3 a","attr":"href"}}}}'},
+      {name:'小说信息',section:'novel_info',json:'{"novel_info":{"container":".book-detail","fields":{"title":{"selector":"h1"},"author":{"selector":".author"},"description":{"selector":".desc"},"cover_url":{"selector":"img","attr":"src"},"status":{"selector":".status"}}}}'},
+      {name:'目录',section:'catalog',json:'{"catalog":{"container":"#chapterlist li","fields":{"title":{"selector":"a"},"url":{"selector":"a","attr":"href"}}}}'},
+      {name:'章节',section:'chapter',json:'{"chapter":{"container":".content","fields":{"title":{"selector":"h1"},"content":{"selector":"#content"}}}}'},
+    ];
+    const loadRules = async () => { try { const r = await API.get('/rules'); rules.value = r.data || []; } catch(e) {} };
+    const selectRule = async (name) => { selected.value = name; try { const r = await API.get('/rules/' + name); jsonText.value = JSON.stringify(r.data, null, 2); origJson.value = jsonText.value; modified.value = false; jsonError.value = ''; } catch(e) {} };
+    const createRule = () => { selected.value = prompt('规则名称(如 23qb):',''); if(selected.value){ jsonText.value='{"source_name":"'+selected.value+'","base_url":"","description":"","version":"1.0","selectors":{},"options":{"request_delay":1.0,"timeout":60}}'; origJson.value=''; modified.value=true; } };
+    const formatJSON = () => { try { jsonText.value = JSON.stringify(JSON.parse(jsonText.value), null, 2); jsonError.value = ''; } catch(e) { jsonError.value = e.message; } };
+    const saveRule = async () => {
+      try { JSON.parse(jsonText.value); } catch(e) { jsonError.value = e.message; return; }
+      saving.value = true;
+      try { await axios({method:'PUT', url:'/api/v1/rules/'+selected.value, data:JSON.parse(jsonText.value), headers:{Authorization:'Bearer '+atok()}}); ElMessage.success('已保存'); origJson.value = jsonText.value; modified.value = false; loadRules(); } catch(e) { ElMessage.error('保存失败'); }
+      saving.value = false;
+    };
+    const deleteRule = async () => { try { await API.delete('/rules/' + selected.value); ElMessage.success('已删除'); selected.value = ''; jsonText.value = '{}'; loadRules(); } catch(e) { ElMessage.error('删除失败'); } };
+    const insertTemplate = (t) => { try { var obj = JSON.parse(jsonText.value); obj.selectors = obj.selectors || {}; Object.assign(obj.selectors, JSON.parse(t.json)); jsonText.value = JSON.stringify(obj, null, 2); modified.value = true; } catch(e) { jsonError.value = e.message; } };
+    const onKeydown = (e) => { if((e.ctrlKey||e.metaKey) && e.key==='s'){ e.preventDefault(); saveRule(); } if(e.key==='Tab'){ e.preventDefault(); jsonText.value = jsonText.value.substring(0,e.target.selectionStart)+'  '+jsonText.value.substring(e.target.selectionEnd); } };
+    watch(jsonText, (v) => { if(origJson.value && v !== origJson.value) modified.value = true; });
+    onMounted(loadRules);
+    return { rules, selected, jsonText, saving, modified, jsonError, templates, selectRule, createRule, formatJSON, saveRule, deleteRule, insertTemplate, onKeydown };
+  }
+};
+
 // ── Cache ─────────────────────────────────────────────────────────────────
 const Cache = {
   template: `
@@ -633,6 +693,7 @@ const routes = [
   { path: '/crawler', component: CrawlerTasks, meta: { title: '采集任务' } },
   { path: '/sites', component: Sites, meta: { title: '站点管理' } },
   { path: '/link-rings', component: LinkRings, meta: { title: '链轮管理' } },
+  { path: '/rules', component: RuleEditor, meta: { title: '采集规则' } },
   { path: '/cache', component: Cache, meta: { title: '缓存运维' } },
 ];
 const router = createRouter({ history: createWebHashHistory(), routes });
