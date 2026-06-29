@@ -1,51 +1,33 @@
 version: '3.8'
 services:
-  mysql:
-    image: mysql:8.0
+  postgres:
+    image: postgres:16-alpine
     environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: novel_come_back
-      MYSQL_CHARSET: utf8mb4
-      MYSQL_COLLATION: utf8mb4_unicode_ci
+      POSTGRES_USER: novel
+      POSTGRES_PASSWORD: novel123
+      POSTGRES_DB: novel_come_back
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "pg_isready -U novel -d novel_come_back"]
+      interval: 5s
+      timeout: 3s
       retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6380:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
 
   app:
     build: .
     ports:
-      - "8008:8008"
+      - "8080:8080"
     environment:
-      DATABASE_URL: "mysql://root:password@mysql:3306/novel_come_back?charset=utf8mb4&parseTime=true"
-      REDIS_URL: "redis://redis:6379/0"
+      DATABASE_URL: "postgres://novel:novel123@postgres:5432/novel_come_back?sslmode=disable"
       SECRET_KEY: "change-me-in-production"
-      SERVER_PORT: "8008"
+      SERVER_PORT: "8080"
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - content_data:/data/content
     restart: unless-stopped
 
 volumes:
-  mysql_data:
-  redis_data:
-  content_data:
+  pgdata:

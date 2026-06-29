@@ -33,7 +33,7 @@ func (r *Router) listNovels(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	result, err := services.ListNovels(services.NovelListParams{
+	result, err := services.ListNovels(req.Context(), services.NovelListParams{
 		Page: page, Size: size,
 		Search:     q.Get("search"),
 		CategoryID: catID,
@@ -70,7 +70,7 @@ func (r *Router) createNovel(w http.ResponseWriter, req *http.Request) {
 		body.Status = "ongoing"
 	}
 
-	novel, err := services.CreateNovel(body.Title, body.Author, body.Description,
+	novel, err := services.CreateNovel(req.Context(), body.Title, body.Author, body.Description,
 		body.SourceURL, body.SourceName, body.Status, body.CategoryIDs)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create novel")
@@ -126,7 +126,7 @@ func (r *Router) routeNovelsPrefix(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) getNovel(w http.ResponseWriter, req *http.Request, novelID string) {
-	novel, err := services.GetNovel(novelID)
+	novel, err := services.GetNovel(req.Context(), novelID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "novel not found")
 		return
@@ -151,7 +151,7 @@ func (r *Router) updateNovel(w http.ResponseWriter, req *http.Request, novelID s
 		}
 		delete(updates, "category_ids")
 	}
-	novel, err := services.UpdateNovel(novelID, updates, catIDs)
+	novel, err := services.UpdateNovel(req.Context(), novelID, updates, catIDs)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update novel")
 		return
@@ -160,7 +160,7 @@ func (r *Router) updateNovel(w http.ResponseWriter, req *http.Request, novelID s
 }
 
 func (r *Router) deleteNovel(w http.ResponseWriter, req *http.Request, novelID string) {
-	if err := services.DeleteNovel(novelID); err != nil {
+	if err := services.DeleteNovel(req.Context(), novelID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete novel")
 		return
 	}
@@ -211,7 +211,7 @@ func (r *Router) handleCover(w http.ResponseWriter, req *http.Request, novelID s
 		return
 	}
 
-	if _, err := services.UpdateNovel(novelID, map[string]interface{}{"cover_image_url": url}, nil); err != nil {
+	if _, err := services.UpdateNovel(req.Context(), novelID, map[string]interface{}{"cover_image_url": url}, nil); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update novel cover")
 		return
 	}
@@ -225,6 +225,6 @@ func (r *Router) handleNovelStatistics(w http.ResponseWriter, req *http.Request,
 		writeError(w, http.StatusMethodNotAllowed, "GET required")
 		return
 	}
-	stats := services.GetNovelStatistics(novelID)
+	stats := services.GetNovelStatistics(req.Context(), novelID)
 	writeOK(w, stats)
 }

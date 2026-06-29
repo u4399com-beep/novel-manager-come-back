@@ -34,7 +34,7 @@ func (r *Router) handleRegister(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	user, err := services.RegisterUser(body.Username, body.Email, body.Password)
+	user, err := services.RegisterUser(req.Context(), body.Username, body.Email, body.Password)
 	if err != nil {
 		switch err {
 		case services.ErrUserExists:
@@ -78,7 +78,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	user, err := services.AuthenticateUser(body.Username, body.Password)
+	user, err := services.AuthenticateUser(req.Context(), body.Username, body.Password)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return
@@ -103,7 +103,7 @@ func (r *Router) handleMe(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if req.Method == http.MethodGet {
-		user, err := services.GetUserByID(userID)
+		user, err := services.GetUserByID(req.Context(), userID)
 		if err != nil {
 			writeError(w, http.StatusNotFound, "user not found")
 			return
@@ -117,7 +117,7 @@ func (r *Router) handleMe(w http.ResponseWriter, req *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
-		user, err := services.UpdateUser(userID, updates)
+		user, err := services.UpdateUser(req.Context(), userID, updates)
 		if err != nil {
 			if err == services.ErrPasswordTooShort {
 				writeError(w, http.StatusBadRequest, "password must be at least 8 characters")
@@ -151,7 +151,7 @@ func (r *Router) handleSearch(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if searchType == "novel" {
-		result, err := services.ListNovels(services.NovelListParams{
+		result, err := services.ListNovels(req.Context(), services.NovelListParams{
 			Page: 1, Size: 20, Search: q, SortBy: "updated_at", SortDir: "desc",
 		})
 		if err != nil {

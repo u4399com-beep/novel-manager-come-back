@@ -1,17 +1,18 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/config"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/database"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/models"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 var (
@@ -21,44 +22,28 @@ var (
 	ErrPasswordTooShort   = errors.New("password must be at least 8 characters")
 )
 
-const minPasswordLen = 8
-
-// HashPassword generates a bcrypt hash.
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", fmt.Errorf("hash password: %w", err)
-	}
-	return string(bytes), nil
+	return string(bytes), err
 }
-
-// CheckPassword compares password against hash.
 func CheckPassword(password, hash string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
-// CreateAccessToken generates a JWT.
 func CreateAccessToken(cfg *config.Config, userID, role string) (string, error) {
 	claims := jwt.MapClaims{
-		"sub":  userID,
-		"role": role,
-		"iat":  time.Now().Unix(),
-		"exp":  time.Now().Add(time.Duration(cfg.AccessTokenExpireMin) * time.Minute).Unix(),
+		"sub": userID, "role": role, "iat": time.Now().Unix(),
+		"exp": time.Now().Add(time.Duration(cfg.AccessTokenExpireMin) * time.Minute).Unix(),
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(cfg.SecretKey))
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(cfg.SecretKey))
 }
 
-// ParseAccessToken validates and returns claims.
 func ParseAccessToken(cfg *config.Config, tokenStr string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
 		return []byte(cfg.SecretKey), nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("parse token: %w", err)
+		return nil, err
 	}
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 		return claims, nil
@@ -66,114 +51,81 @@ func ParseAccessToken(cfg *config.Config, tokenStr string) (jwt.MapClaims, error
 	return nil, errors.New("invalid token")
 }
 
-// RegisterUser creates a new user account.
-// Uses database unique constraint as the ultimate guard against race conditions.
-func RegisterUser(username, email, password string) (*models.User, error) {
-	if len(password) < minPasswordLen {
+func RegisterUser(ctx context.Context, username, email, password string) (*models.User, error) {
+	if len(password) < 8 {
 		return nil, ErrPasswordTooShort
 	}
-
-	hashed, err := HashPassword(password)
+	hashed, _ := HashPassword(password)
+	u := &models.User{}
+	err := database.Pool.QueryRow(ctx,
+		"INSERT INTO users (username, email, hashed_password) VALUES ($1,$2,$3) ON CONFLICT (username) DO NOTHING RETURNING id, username, email, role, is_active, created_at, updated_at",
+		username, email, hashed,
+	).Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.IsActive, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
-		return nil, err
-	}
-
-	user := &models.User{
-		Username:       username,
-		Email:          email,
-		HashedPassword: hashed,
-	}
-
-	// Rely on DB unique constraint for atomicity (not Go-level count check)
-	if err := database.DB.Create(user).Error; err != nil {
-		if isDuplicateKeyError(err) {
+		if strings.Contains(err.Error(), "no rows") {
 			return nil, ErrUserExists
 		}
-		return nil, fmt.Errorf("create user: %w", err)
-	}
-	return user, nil
-}
-
-// isDuplicateKeyError checks if the error is a MySQL/SQLite duplicate key violation.
-func isDuplicateKeyError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "UNIQUE constraint") ||
-		strings.Contains(msg, "Duplicate entry") ||
-		strings.Contains(msg, "duplicate key")
-}
-
-// AuthenticateUser verifies credentials and returns the user.
-func AuthenticateUser(username, password string) (*models.User, error) {
-	var user models.User
-	if err := database.DB.Where("username = ?", username).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrInvalidCredentials
-		}
 		return nil, err
 	}
-	if !user.IsActive {
-		return nil, ErrInvalidCredentials
-	}
-	if !CheckPassword(password, user.HashedPassword) {
-		return nil, ErrInvalidCredentials
-	}
-	return &user, nil
+	return u, nil
 }
 
-// GetUserByID retrieves a user.
-func GetUserByID(userID string) (*models.User, error) {
-	var user models.User
-	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrUserNotFound
-		}
-		return nil, err
+func AuthenticateUser(ctx context.Context, username, password string) (*models.User, error) {
+	u := &models.User{}
+	err := database.Pool.QueryRow(ctx,
+		"SELECT id, username, email, hashed_password, role, is_active, created_at, updated_at FROM users WHERE username = $1", username,
+	).Scan(&u.ID, &u.Username, &u.Email, &u.HashedPassword, &u.Role, &u.IsActive, &u.CreatedAt, &u.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrInvalidCredentials
 	}
-	return &user, nil
-}
-
-// UpdateUser applies safe partial updates. Only allowlisted fields are accepted
-// to prevent privilege escalation (changing role, is_active, etc.).
-func UpdateUser(userID string, updates map[string]interface{}) (*models.User, error) {
-	user, err := GetUserByID(userID)
 	if err != nil {
 		return nil, err
 	}
-
-	// Allowlist: only these fields can be self-updated
-	safeUpdates := make(map[string]interface{})
-	allowedKeys := map[string]bool{
-		"username": true,
-		"email":    true,
+	if !CheckPassword(password, u.HashedPassword) {
+		return nil, ErrInvalidCredentials
 	}
+	return u, nil
+}
 
+func GetUserByID(ctx context.Context, userID string) (*models.User, error) {
+	u := &models.User{}
+	err := database.Pool.QueryRow(ctx,
+		"SELECT id, username, email, hashed_password, role, is_active, created_at, updated_at FROM users WHERE id = $1", userID,
+	).Scan(&u.ID, &u.Username, &u.Email, &u.HashedPassword, &u.Role, &u.IsActive, &u.CreatedAt, &u.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrUserNotFound
+	}
+	return u, err
+}
+
+func UpdateUser(ctx context.Context, userID string, updates map[string]interface{}) (*models.User, error) {
+	pool := database.Pool
+	allowed := map[string]bool{"username": true, "email": true}
+	setClauses := []string{}
+	args := []interface{}{}
+	n := 1
 	for k, v := range updates {
-		if allowedKeys[k] {
-			safeUpdates[k] = v
+		if allowed[k] {
+			setClauses = append(setClauses, fmt.Sprintf("%s = $%d", k, n))
+			args = append(args, v)
+			n++
 		}
 	}
-
-	// Handle password separately (requires hashing)
 	if pw, ok := updates["password"].(string); ok {
-		if len(pw) < minPasswordLen {
+		if len(pw) < 8 {
 			return nil, ErrPasswordTooShort
 		}
-		hashed, err := HashPassword(pw)
-		if err != nil {
+		hashed, _ := HashPassword(pw)
+		setClauses = append(setClauses, fmt.Sprintf("hashed_password = $%d", n))
+		args = append(args, hashed)
+		n++
+	}
+	if len(setClauses) > 0 {
+		sql := fmt.Sprintf("UPDATE users SET %s WHERE id = $%d", strings.Join(setClauses, ", "), n)
+		args = append(args, userID)
+		if _, err := pool.Exec(ctx, sql, args...); err != nil {
 			return nil, err
 		}
-		safeUpdates["hashed_password"] = hashed
 	}
-
-	if len(safeUpdates) == 0 {
-		return user, nil
-	}
-
-	if err := database.DB.Model(user).Updates(safeUpdates).Error; err != nil {
-		return nil, fmt.Errorf("update user: %w", err)
-	}
-	return GetUserByID(userID)
+	return GetUserByID(ctx, userID)
 }

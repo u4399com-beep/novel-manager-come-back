@@ -2,164 +2,130 @@ package services
 
 import (
 	"compress/gzip"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/database"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/models"
-	"gorm.io/gorm"
 )
 
-// ── Word count ─────────────────────────────────────────────────────────────
-
-// CountWords counts Chinese characters + English words in text without regex.
 func CountWords(text string) int {
-	if text == "" {
-		return 0
-	}
-	// Fast path: single-pass counting
-	chinese, english, inWord := 0, 0, false
+	if text == "" { return 0 }
+	ch, en, inWord := 0, 0, false
 	for _, r := range text {
-		if r >= 0x4e00 && r <= 0x9fff {
-			chinese++
-			inWord = false
+		if r >= 0x4e00 && r <= 0x9fff { ch++; inWord = false
 		} else if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
-			if !inWord {
-				english++
-				inWord = true
-			}
-		} else {
-			inWord = false
-		}
+			if !inWord { en++; inWord = true }
+		} else { inWord = false }
 	}
-	return chinese + english
+	return ch + en
 }
 
-// ── Chapter CRUD ───────────────────────────────────────────────────────────
-
-func GetChapters(novelID string, page, size int) ([]models.Chapter, int64, error) {
+func GetChapters(ctx context.Context, novelID string, page, size int) ([]models.Chapter, int64, error) {
+	pool := database.Pool
 	var total int64
-	database.DB.Model(&models.Chapter{}).Where("novel_id = ?", novelID).Count(&total)
+	pool.QueryRow(ctx, "SELECT COUNT(*) FROM chapters WHERE novel_id = $1", novelID).Scan(&total)
 
-	var chapters []models.Chapter
-	if err := database.DB.Where("novel_id = ?", novelID).
-		Order("sort_order ASC").
-		Offset((page - 1) * size).Limit(size).
-		Find(&chapters).Error; err != nil {
-		return nil, 0, err
-	}
-	return chapters, total, nil
+	rows, err := pool.Query(ctx,
+		"SELECT id, novel_id, title, content_file, volume, sort_order, word_count, source_url, is_published, created_at, updated_at FROM chapters WHERE novel_id = $1 ORDER BY sort_order ASC LIMIT $2 OFFSET $3",
+		novelID, size, (page-1)*size)
+	if err != nil { return nil, 0, err }
+	defer rows.Close()
+
+	chapters, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Chapter])
+	return chapters, total, err
 }
 
-func GetChapter(chapterID string) (*models.Chapter, error) {
-	var ch models.Chapter
-	if err := database.DB.Where("id = ?", chapterID).First(&ch).Error; err != nil {
-		return nil, err
-	}
-	return &ch, nil
+func GetChapter(ctx context.Context, chapterID string) (*models.Chapter, error) {
+	ch := &models.Chapter{}
+	err := database.Pool.QueryRow(ctx,
+		"SELECT id, novel_id, title, content, content_file, volume, sort_order, word_count, source_url, is_published, created_at, updated_at FROM chapters WHERE id = $1", chapterID,
+	).Scan(&ch.ID, &ch.NovelID, &ch.Title, &ch.Content, &ch.ContentFile, &ch.Volume, &ch.SortOrder, &ch.WordCount, &ch.SourceURL, &ch.IsPublished, &ch.CreatedAt, &ch.UpdatedAt)
+	return ch, err
 }
 
 func GetChapterContent(ch *models.Chapter) (string, error) {
 	if ch.ContentFile != "" {
 		text, err := ReadContentFile(ch.ContentFile)
-		if err == nil && text != "" {
-			return text, nil
-		}
+		if err == nil && text != "" { return text, nil }
 	}
 	return ch.Content, nil
 }
 
-func CreateChapter(novelID, title, content, sourceURL string, sortOrder int, isPublished bool) (*models.Chapter, error) {
-	if novelID == "" || utf8.RuneCountInString(novelID) < 2 {
-		return nil, fmt.Errorf("invalid novel_id")
-	}
+func CreateChapter(ctx context.Context, novelID, title, content, sourceURL string, sortOrder int, isPublished bool) (*models.Chapter, error) {
+	pool := database.Pool
 	if sortOrder == 0 {
-		var maxOrder int
-		database.DB.Model(&models.Chapter{}).
-			Where("novel_id = ?", novelID).
-			Select("COALESCE(MAX(sort_order), 0)").Scan(&maxOrder)
-		sortOrder = maxOrder + 1
+		pool.QueryRow(ctx, "SELECT COALESCE(MAX(sort_order),0)+1 FROM chapters WHERE novel_id = $1", novelID).Scan(&sortOrder)
 	}
-
-	ch := &models.Chapter{
-		NovelID:     novelID,
-		Title:       title,
-		SourceURL:   sourceURL,
-		IsPublished: isPublished,
-		SortOrder:   sortOrder,
-		WordCount:   CountWords(content),
-	}
-
-	if err := database.DB.Create(ch).Error; err != nil {
-		return nil, err
-	}
+	ch := &models.Chapter{}
+	err := pool.QueryRow(ctx,
+		`INSERT INTO chapters (novel_id, title, source_url, is_published, sort_order, word_count)
+		 VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, novel_id, title, content, content_file, volume, sort_order, word_count, source_url, is_published, created_at, updated_at`,
+		novelID, title, sourceURL, isPublished, sortOrder, CountWords(content),
+	).Scan(&ch.ID, &ch.NovelID, &ch.Title, &ch.Content, &ch.ContentFile, &ch.Volume, &ch.SortOrder, &ch.WordCount, &ch.SourceURL, &ch.IsPublished, &ch.CreatedAt, &ch.UpdatedAt)
+	if err != nil { return nil, err }
 
 	if content != "" {
-		contentFile, err := WriteContentFile(novelID, ch.ID, content)
-		if err == nil {
-			database.DB.Model(ch).Update("content_file", contentFile)
-			ch.ContentFile = contentFile
+		if cf, err := WriteContentFile(novelID, ch.ID, content); err == nil {
+			pool.Exec(ctx, "UPDATE chapters SET content_file = $1 WHERE id = $2", cf, ch.ID)
+			ch.ContentFile = cf
 		}
 	}
-
-	recountNovelChapters(novelID, 1)
+	recountNovelChapters(ctx, novelID, 1)
 	return ch, nil
 }
 
-func UpdateChapter(chapterID string, updates map[string]interface{}) (*models.Chapter, error) {
-	ch, err := GetChapter(chapterID)
-	if err != nil {
-		return nil, err
-	}
+func UpdateChapter(ctx context.Context, chapterID string, updates map[string]interface{}) (*models.Chapter, error) {
+	ch, err := GetChapter(ctx, chapterID)
+	if err != nil { return nil, err }
 
-	// Allowlist: only these fields can be updated
-	safeUpdates := make(map[string]interface{})
-	allowedKeys := map[string]bool{
-		"title": true, "content": true, "source_url": true,
-		"sort_order": true, "is_published": true, "volume": true,
-	}
+	pool := database.Pool
+	safe := make(map[string]interface{})
+	allowed := map[string]bool{"title": true, "content": true, "source_url": true, "sort_order": true, "is_published": true, "volume": true}
 	for k, v := range updates {
-		if allowedKeys[k] {
-			safeUpdates[k] = v
+		if allowed[k] { safe[k] = v }
+	}
+	if content, ok := safe["content"].(string); ok {
+		safe["word_count"] = CountWords(content)
+		if cf, err := WriteContentFile(ch.NovelID, ch.ID, content); err == nil {
+			safe["content_file"] = cf
 		}
 	}
-
-	if content, ok := safeUpdates["content"].(string); ok {
-		safeUpdates["word_count"] = CountWords(content)
-		contentFile, err := WriteContentFile(ch.NovelID, ch.ID, content)
-		if err == nil {
-			safeUpdates["content_file"] = contentFile
+	if len(safe) > 0 {
+		setClauses := []string{}
+		args := []interface{}{}
+		n := 1
+		for k, v := range safe {
+			setClauses = append(setClauses, fmt.Sprintf("%s = $%d", k, n))
+			args = append(args, v)
+			n++
 		}
+		sql := fmt.Sprintf("UPDATE chapters SET %s WHERE id = $%d", strings.Join(setClauses, ", "), n)
+		args = append(args, chapterID)
+		if _, err := pool.Exec(ctx, sql, args...); err != nil { return nil, err }
 	}
-
-	if len(safeUpdates) > 0 {
-		if err := database.DB.Model(ch).Updates(safeUpdates).Error; err != nil {
-			return nil, err
-		}
-	}
-	return GetChapter(chapterID)
+	return GetChapter(ctx, chapterID)
 }
 
-func DeleteChapter(chapterID string) error {
-	ch, err := GetChapter(chapterID)
-	if err != nil {
+func DeleteChapter(ctx context.Context, chapterID string) error {
+	ch, err := GetChapter(ctx, chapterID)
+	if err != nil { return err }
+	if _, err := database.Pool.Exec(ctx, "DELETE FROM chapters WHERE id = $1", chapterID); err != nil {
 		return err
 	}
-	if err := database.DB.Delete(ch).Error; err != nil {
-		return err
-	}
-	recountNovelChapters(ch.NovelID, -1)
+	recountNovelChapters(ctx, ch.NovelID, -1)
 	return nil
 }
 
-func BatchCreateChapters(novelID string, chaptersData []map[string]interface{}) ([]models.Chapter, error) {
+func BatchCreateChapters(ctx context.Context, novelID string, chaptersData []map[string]interface{}) ([]models.Chapter, error) {
+	pool := database.Pool
 	var maxOrder int
-	database.DB.Model(&models.Chapter{}).Where("novel_id = ?", novelID).
-		Select("COALESCE(MAX(sort_order),0)").Scan(&maxOrder)
+	pool.QueryRow(ctx, "SELECT COALESCE(MAX(sort_order),0) FROM chapters WHERE novel_id = $1", novelID).Scan(&maxOrder)
 
 	chapters := make([]models.Chapter, 0, len(chaptersData))
 	for i, data := range chaptersData {
@@ -168,167 +134,98 @@ func BatchCreateChapters(novelID string, chaptersData []map[string]interface{}) 
 		sourceURL, _ := data["source_url"].(string)
 		volume, _ := data["volume"].(string)
 
-		sortOrder := maxOrder + i + 1
-		if so, ok := data["sort_order"].(float64); ok && int(so) > 0 {
-			sortOrder = int(so)
-		}
+		so := maxOrder + i + 1
+		if v, ok := data["sort_order"].(float64); ok && int(v) > 0 { so = int(v) }
 
-		ch := models.Chapter{
-			NovelID:   novelID,
-			Title:     title,
-			SourceURL: sourceURL,
-			Volume:    volume,
-			SortOrder: sortOrder,
-			WordCount: CountWords(content),
-		}
+		ch := models.Chapter{}
+		err := pool.QueryRow(ctx,
+			`INSERT INTO chapters (novel_id, title, source_url, volume, sort_order, word_count)
+			 VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, novel_id, title, content, content_file, volume, sort_order, word_count, source_url, is_published, created_at, updated_at`,
+			novelID, title, sourceURL, volume, so, CountWords(content),
+		).Scan(&ch.ID, &ch.NovelID, &ch.Title, &ch.Content, &ch.ContentFile, &ch.Volume, &ch.SortOrder, &ch.WordCount, &ch.SourceURL, &ch.IsPublished, &ch.CreatedAt, &ch.UpdatedAt)
+		if err != nil { return nil, err }
 		chapters = append(chapters, ch)
 	}
 
-	if err := database.DB.Create(&chapters).Error; err != nil {
-		return nil, err
-	}
-
-	// Write content files asynchronously (each goroutine creates its own DB session)
 	var wg sync.WaitGroup
 	for i := range chapters {
 		if content, ok := chaptersData[i]["content"].(string); ok && content != "" {
 			wg.Add(1)
-			go func(chapterID, novelID, txt string) {
+			go func(chID, nID, txt string) {
 				defer wg.Done()
-				if cf, err := WriteContentFile(novelID, chapterID, txt); err == nil {
-					// Each goroutine uses a fresh GORM session (safe for concurrent use)
-					database.DB.Session(&gorm.Session{}).
-						Model(&models.Chapter{}).Where("id = ?", chapterID).
-						Update("content_file", cf)
+				if cf, err := WriteContentFile(nID, chID, txt); err == nil {
+					pool.Exec(ctx, "UPDATE chapters SET content_file = $1 WHERE id = $2", cf, chID)
 				}
 			}(chapters[i].ID, novelID, content)
 		}
 	}
 	wg.Wait()
-
-	recountNovelChapters(novelID, len(chapters))
+	recountNovelChapters(ctx, novelID, len(chapters))
 	return chapters, nil
 }
 
-func BatchDeleteChapters(novelID string, chapterIDs []string) (int64, error) {
-	if len(chapterIDs) == 0 {
-		return 0, nil
-	}
-	result := database.DB.Where("id IN ? AND novel_id = ?", chapterIDs, novelID).Delete(&models.Chapter{})
-	if result.Error != nil {
-		return 0, result.Error
-	}
-	recountNovelChapters(novelID, -int(result.RowsAffected))
-	return result.RowsAffected, nil
+func BatchDeleteChapters(ctx context.Context, novelID string, chapterIDs []string) (int64, error) {
+	if len(chapterIDs) == 0 { return 0, nil }
+	tag, err := database.Pool.Exec(ctx, "DELETE FROM chapters WHERE id = ANY($1) AND novel_id = $2", chapterIDs, novelID)
+	if err != nil { return 0, err }
+	recountNovelChapters(ctx, novelID, -int(tag.RowsAffected()))
+	return tag.RowsAffected(), nil
 }
 
-func ReorderChapters(novelID string, orders map[string]int) error {
-	if len(orders) == 0 {
-		return nil
-	}
-	// Bulk update using a single transaction with CASE WHEN
-	return database.DB.Transaction(func(tx *gorm.DB) error {
-		for chID, newOrder := range orders {
-			if err := tx.Model(&models.Chapter{}).
-				Where("id = ? AND novel_id = ?", chID, novelID).
-				Update("sort_order", newOrder).Error; err != nil {
-				return err
-			}
+func ReorderChapters(ctx context.Context, novelID string, orders map[string]int) error {
+	if len(orders) == 0 { return nil }
+	tx, _ := database.Pool.Begin(ctx)
+	defer tx.Rollback(ctx)
+	for chID, so := range orders {
+		if _, err := tx.Exec(ctx, "UPDATE chapters SET sort_order = $1 WHERE id = $2 AND novel_id = $3", so, chID, novelID); err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	return tx.Commit(ctx)
+}
+
+func recountNovelChapters(ctx context.Context, novelID string, delta int) {
+	database.Pool.Exec(ctx, "UPDATE novels SET total_chapters = total_chapters + $1 WHERE id = $2", delta, novelID)
 }
 
 // ── Content file store ─────────────────────────────────────────────────────
 
-// contentDir is resolved to absolute path at init for path traversal safety.
 var contentDir = func() string {
-	dir := "data/content"
-	if abs, err := filepath.Abs(dir); err == nil {
-		return abs
-	}
-	return dir
+	d, _ := filepath.Abs("data/content")
+	return d
 }()
 
 func WriteContentFile(novelID, chapterID, content string) (string, error) {
-	if novelID == "" || chapterID == "" {
-		return "", fmt.Errorf("invalid IDs")
-	}
+	if novelID == "" || chapterID == "" { return "", fmt.Errorf("invalid IDs") }
 	prefix := novelID[:min(2, len(novelID))]
 	dir := filepath.Join(contentDir, prefix, novelID)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", err
-	}
+	os.MkdirAll(dir, 0755)
 
 	relPath := filepath.Join(prefix, novelID, chapterID+".gz")
 	absPath := filepath.Join(contentDir, relPath)
-
-	// Validate path stays within contentDir
 	if !strings.HasPrefix(filepath.Clean(absPath), filepath.Clean(contentDir)) {
-		return "", fmt.Errorf("path traversal detected")
+		return "", fmt.Errorf("path traversal")
 	}
-
-	f, err := os.Create(absPath)
-	if err != nil {
-		return "", err
-	}
+	f, _ := os.Create(absPath)
 	defer f.Close()
-
 	gw := gzip.NewWriter(f)
-	if _, err := gw.Write([]byte(content)); err != nil {
-		gw.Close()
-		return "", err
-	}
-	if err := gw.Close(); err != nil {
-		return "", err
-	}
+	if _, err := gw.Write([]byte(content)); err != nil { gw.Close(); return "", err }
+	gw.Close()
 	return relPath, nil
 }
 
 func ReadContentFile(contentFile string) (string, error) {
-	// Strip legacy "content/" prefix from Python-migrated data
 	contentFile = strings.TrimPrefix(contentFile, "content/")
 	path := filepath.Join(contentDir, contentFile)
-	if !strings.HasPrefix(filepath.Clean(path), filepath.Clean(contentDir)) {
-		return "", fmt.Errorf("path traversal detected")
-	}
-
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
+	if !strings.HasPrefix(filepath.Clean(path), filepath.Clean(contentDir)) { return "", fmt.Errorf("path traversal") }
+	f, _ := os.Open(path)
 	defer f.Close()
-
-	gr, err := gzip.NewReader(f)
-	if err != nil {
-		return "", err
-	}
+	gr, _ := gzip.NewReader(f)
 	defer gr.Close()
-
 	var sb strings.Builder
 	buf := make([]byte, 32*1024)
-	for {
-		n, err := gr.Read(buf)
-		if n > 0 {
-			sb.Write(buf[:n])
-		}
-		if err != nil {
-			break
-		}
-	}
+	for { n, err := gr.Read(buf); if n > 0 { sb.Write(buf[:n]) }; if err != nil { break } }
 	return sb.String(), nil
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-func recountNovelChapters(novelID string, delta int) {
-	database.DB.Model(&models.Novel{}).Where("id = ?", novelID).
-		UpdateColumn("total_chapters", gorm.Expr("total_chapters + ?", delta))
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
+func min(a, b int) int { if a < b { return a }; return b }

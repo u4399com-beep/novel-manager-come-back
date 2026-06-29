@@ -72,7 +72,7 @@ func (r *Router) listChapters(w http.ResponseWriter, req *http.Request, novelID 
 		size = 50
 	}
 
-	chapters, total, err := services.GetChapters(novelID, page, size)
+	chapters, total, err := services.GetChapters(req.Context(), novelID, page, size)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list chapters")
 		return
@@ -107,7 +107,7 @@ func (r *Router) createChapter(w http.ResponseWriter, req *http.Request, novelID
 		published = *body.IsPublished
 	}
 
-	ch, err := services.CreateChapter(novelID, body.Title, body.Content, body.SourceURL, body.SortOrder, published)
+	ch, err := services.CreateChapter(req.Context(), novelID, body.Title, body.Content, body.SourceURL, body.SortOrder, published)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create chapter")
 		return
@@ -116,7 +116,7 @@ func (r *Router) createChapter(w http.ResponseWriter, req *http.Request, novelID
 }
 
 func (r *Router) getChapter(w http.ResponseWriter, req *http.Request, chapterID string) {
-	ch, err := services.GetChapter(chapterID)
+	ch, err := services.GetChapter(req.Context(), chapterID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "chapter not found")
 		return
@@ -138,7 +138,7 @@ func (r *Router) updateChapter(w http.ResponseWriter, req *http.Request, chapter
 		writeError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
-	ch, err := services.UpdateChapter(chapterID, updates)
+	ch, err := services.UpdateChapter(req.Context(), chapterID, updates)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update chapter")
 		return
@@ -147,7 +147,7 @@ func (r *Router) updateChapter(w http.ResponseWriter, req *http.Request, chapter
 }
 
 func (r *Router) deleteChapter(w http.ResponseWriter, req *http.Request, chapterID string) {
-	if err := services.DeleteChapter(chapterID); err != nil {
+	if err := services.DeleteChapter(req.Context(), chapterID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete chapter")
 		return
 	}
@@ -166,7 +166,7 @@ func (r *Router) batchCreateChapters(w http.ResponseWriter, req *http.Request, n
 		writeError(w, http.StatusBadRequest, "chapters must have 1-500 items")
 		return
 	}
-	chapters, err := services.BatchCreateChapters(novelID, body.Chapters)
+	chapters, err := services.BatchCreateChapters(req.Context(), novelID, body.Chapters)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to batch create chapters")
 		return
@@ -182,7 +182,7 @@ func (r *Router) batchDeleteChapters(w http.ResponseWriter, req *http.Request, n
 		writeError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
-	deleted, err := services.BatchDeleteChapters(novelID, body.IDs)
+	deleted, err := services.BatchDeleteChapters(req.Context(), novelID, body.IDs)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to batch delete chapters")
 		return
@@ -198,7 +198,7 @@ func (r *Router) reorderChapters(w http.ResponseWriter, req *http.Request, novel
 		writeError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
-	if err := services.ReorderChapters(novelID, body.Orders); err != nil {
+	if err := services.ReorderChapters(req.Context(), novelID, body.Orders); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to reorder chapters")
 		return
 	}

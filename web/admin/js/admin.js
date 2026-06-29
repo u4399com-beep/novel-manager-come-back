@@ -99,7 +99,7 @@ const MainLayout = {
       { path: '/link-rings', label: '链轮管理', icon: '🔗' },
       { path: '/cache', label: '缓存运维', icon: '🗄️' },
     ];
-    const navigate = (path) => $router.push(path);
+    const navigate = (path) => router.push(path);
     return { route, pageTitle, user, collapsed, menu, navigate, logout };
   }
 };

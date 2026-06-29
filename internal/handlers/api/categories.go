@@ -4,77 +4,54 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-
+	"github.com/jackc/pgx/v5"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/database"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/models"
 )
 
 func (r *Router) handleCategories(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context(); pool := database.Pool
 	switch req.Method {
 	case http.MethodGet:
-		var cats []models.Category
-		database.DB.Order("sort_order ASC").Find(&cats)
+		rows, _ := pool.Query(ctx, "SELECT id,name,slug,sort_order,created_at,updated_at FROM categories ORDER BY sort_order")
+		cats, _ := pgx.CollectRows(rows, pgx.RowToStructByName[models.Category])
+		if rows != nil { rows.Close() }
 		writeOK(w, cats)
 	case http.MethodPost:
-		var body struct {
-			Name      string `json:"name"`
-			Slug      string `json:"slug"`
-			SortOrder int    `json:"sort_order"`
-		}
-		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid JSON")
-			return
-		}
-		if body.Name == "" || body.Slug == "" {
-			writeError(w, http.StatusBadRequest, "name and slug required")
-			return
-		}
-		cat := models.Category{Name: body.Name, Slug: body.Slug, SortOrder: body.SortOrder}
-		if err := database.DB.Create(&cat).Error; err != nil {
-			writeError(w, http.StatusConflict, "category exists")
-			return
-		}
-		writeJSON(w, http.StatusCreated, cat)
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "GET/POST required")
+		var b struct{ Name, Slug string; SortOrder int }
+		if err := json.NewDecoder(req.Body).Decode(&b); err != nil { writeError(w, 400, "invalid JSON"); return }
+		if b.Name == "" || b.Slug == "" { writeError(w, 400, "name and slug required"); return }
+		var c models.Category
+		err := pool.QueryRow(ctx, "INSERT INTO categories (name,slug,sort_order) VALUES ($1,$2,$3) RETURNING id,name,slug,sort_order,created_at,updated_at", b.Name, b.Slug, b.SortOrder).
+			Scan(&c.ID, &c.Name, &c.Slug, &c.SortOrder, &c.CreatedAt, &c.UpdatedAt)
+		if err != nil { writeError(w, 409, "category exists"); return }
+		writeJSON(w, 201, c)
+	default: writeError(w, 405, "GET/POST required")
 	}
 }
 
 func (r *Router) handleCategoryByID(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context(); pool := database.Pool
 	idStr := strings.TrimPrefix(req.URL.Path, r.cfg.APIPrefix+"/categories/")
-
 	switch req.Method {
 	case http.MethodGet:
-		var cat models.Category
-		if err := database.DB.First(&cat, idStr).Error; err != nil {
-			writeError(w, http.StatusNotFound, "category not found")
-			return
-		}
-		writeOK(w, cat)
+		var c models.Category
+		if err := pool.QueryRow(ctx, "SELECT id,name,slug,sort_order,created_at,updated_at FROM categories WHERE id=$1", idStr).
+			Scan(&c.ID,&c.Name,&c.Slug,&c.SortOrder,&c.CreatedAt,&c.UpdatedAt); err != nil { writeError(w, 404, "not found"); return }
+		writeOK(w, c)
 	case http.MethodPut:
-		var updates map[string]interface{}
-		if err := json.NewDecoder(req.Body).Decode(&updates); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid JSON")
-			return
+		var u map[string]interface{}
+		json.NewDecoder(req.Body).Decode(&u)
+		for k, v := range map[string]string{"name":"name","slug":"slug","sort_order":"sort_order"} {
+			if val, ok := u[k]; ok { pool.Exec(ctx, "UPDATE categories SET "+v+"=$1 WHERE id=$2", val, idStr) }
 		}
-		if err := database.DB.Model(&models.Category{}).Where("id = ?", idStr).Updates(updates).Error; err != nil {
-			writeError(w, http.StatusInternalServerError, "update failed")
-			return
-		}
-		// Re-fetch and handle potential error
-		var cat models.Category
-		if err := database.DB.First(&cat, idStr).Error; err != nil {
-			writeError(w, http.StatusNotFound, "category not found after update")
-			return
-		}
-		writeOK(w, cat)
+		var c models.Category
+		pool.QueryRow(ctx, "SELECT id,name,slug,sort_order,created_at,updated_at FROM categories WHERE id=$1", idStr).
+			Scan(&c.ID,&c.Name,&c.Slug,&c.SortOrder,&c.CreatedAt,&c.UpdatedAt)
+		writeOK(w, c)
 	case http.MethodDelete:
-		if err := database.DB.Delete(&models.Category{}, idStr).Error; err != nil {
-			writeError(w, http.StatusInternalServerError, "delete failed")
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "GET/PUT/DELETE required")
+		pool.Exec(ctx, "DELETE FROM categories WHERE id=$1", idStr)
+		w.WriteHeader(204)
+	default: writeError(w, 405, "GET/PUT/DELETE required")
 	}
 }
