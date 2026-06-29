@@ -1,7 +1,9 @@
 /* 归来小说CMS - Admin Panel v3.0 — Full Feature Replication */
 const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } = Vue;
 const { createRouter, createWebHashHistory, useRoute, useRouter } = VueRouter;
-const { ElMessage, ElMessageBox, ElNotification } = ElementPlus;
+const ElMessage = ElementPlus.ElMessage || ElementPlus.Message;
+const ElMessageBox = ElementPlus.ElMessageBox || ElementPlus.MessageBox;
+const ElNotification = ElementPlus.ElNotification || ElementPlus.Notification;
 const Icons = window.ElementPlusIconsVue || {};
 
 const API = axios.create({ baseURL: '/api/v1' });
@@ -397,10 +399,11 @@ const ChapterEditor = {
 const CategoriesC = {
   template: `
   <div>
-    <div class="page-header"><h2>🏷️ 分类管理</h2></div>
+    <div class="page-header"><h2>🏷️ 分类管理</h2><p style="color:#909399">{{items.length}} 个分类</p></div>
     <div class="card">
       <div class="toolbar"><div></div><el-button type="primary" @click="open()">+ 新建分类</el-button></div>
-      <el-table :data="items" stripe v-loading="loading">
+      <div v-if="items.length===0" style="text-align:center;padding:40px;color:#909399">暂无分类，点击上方按钮创建</div>
+      <el-table v-else :data="items" stripe v-loading="loading">
         <el-table-column prop="id" label="ID" width="60"/><el-table-column prop="name" label="名称" width="150"/>
         <el-table-column prop="slug" label="标识" width="150"/><el-table-column prop="sort_order" label="排序" width="80"/>
         <el-table-column label="操作" width="160"><template #default="r">
@@ -417,7 +420,7 @@ const CategoriesC = {
   setup() {
     const items = ref([]); const loading = ref(false); const dlg = ref(false); const editing = ref(false); const saving = ref(false);
     const f = reactive({ id: '', name: '', slug: '', sort_order: 0 });
-    const load = async () => { loading.value = true; try { const r = await API.get('/categories'); items.value = r.data; } catch (e) {} loading.value = false; };
+    const load = async () => { loading.value = true; try { const r = await API.get('/categories'); items.value = Array.isArray(r.data) ? r.data : []; console.log('Categories loaded:', items.value.length); } catch (e) { console.error('Categories load error:', e); } loading.value = false; };
     const open = (row) => { editing.value = !!row; if (row) { f.id = row.id; f.name = row.name; f.slug = row.slug; f.sort_order = row.sort_order; } else { f.id = ''; f.name = ''; f.slug = ''; f.sort_order = 0; } dlg.value = true; };
     const save = async () => {
       if (!f.name || !f.slug) return ElMessage.warning('名称和标识必填');
