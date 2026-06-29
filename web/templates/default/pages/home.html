@@ -38,7 +38,7 @@
           <div class="hero-overlay">
             <h1>{{.Title}}</h1>
             <p class="hero-author">{{.Author}} · {{.TotalChapters}}章 · {{statusLabel .Status}}</p>
-            <p class="hero-desc">{{truncate .Description 100}}</p>
+            <p class="hero-desc">{{truncate (stripHTML .Description) 100}}</p>
             <span class="hero-btn">立即阅读 →</span>
           </div>
         </a>

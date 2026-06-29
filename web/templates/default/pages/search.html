@@ -31,7 +31,7 @@
       <div class="novel-info">
         <a href="/novel/{{.ID}}"><h3>{{.Title}}</h3></a>
         <p class="author">{{.Author}}</p>
-        <p class="desc">{{truncate .Description 120}}</p>
+        <p class="desc">{{truncate (stripHTML .Description) 120}}</p>
       </div>
     </div>
     {{else}}

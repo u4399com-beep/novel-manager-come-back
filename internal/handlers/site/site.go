@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -43,6 +44,13 @@ func NewRouter(cfg *config.Config) *Router {
 		"add": func(a, b int) int { return a + b },
 		"gt":  func(a, b int) bool { return a > b },
 		"lt":  func(a, b int) bool { return a < b },
+		"stripHTML": func(s string) string {
+			s = strings.ReplaceAll(s, "<br>", "\n")
+			s = strings.ReplaceAll(s, "<br/>", "\n")
+			s = strings.ReplaceAll(s, "<br />", "\n")
+			re := regexp.MustCompile(`<[^>]*>`)
+			return strings.TrimSpace(re.ReplaceAllString(s, ""))
+		},
 		"eq":  func(a, b interface{}) bool { return a == b },
 		"truncate": func(s string, n int) string {
 			r := []rune(s)
