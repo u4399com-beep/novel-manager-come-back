@@ -97,7 +97,7 @@ const MainLayout = {
       { path: '/link-rings', label: '链轮管理', icon: '🔗' },
       { path: '/cache', label: '缓存运维', icon: '🗄️' },
     ];
-    const navigate = (path) => router.push(path);
+    const navigate = (path) => $router.push(path);
     return { route, pageTitle, user, collapsed, menu, navigate, logout };
   }
 };
@@ -220,7 +220,7 @@ const NovelForm = {
         <el-form-item label="源URL"><el-input v-model="f.source_url" placeholder="外部小说源地址"/></el-form-item>
         <el-form-item v-if="!isEdit" label="封面"><input type="file" accept="image/*" @change="onCover" ref="coverInput"/><img v-if="coverPreview" :src="coverPreview" style="width:120px;height:160px;object-fit:cover;margin-top:8px;border-radius:6px"/></el-form-item>
         <el-form-item v-if="isEdit && f.cover_image_url" label="封面"><img :src="f.cover_image_url" style="width:120px;height:160px;object-fit:cover;border-radius:6px"/></el-form-item>
-        <el-form-item><el-button type="primary" @click="save" :loading="saving">{{isEdit?'保存':'创建'}}</el-button><el-button @click="$router.back()">取消</el-button></el-form-item>
+        <el-form-item><el-button type="primary" @click="save" :loading="saving">{{isEdit?'保存':'创建'}}</el-button><el-button @click="router.back()">取消</el-button></el-form-item>
       </el-form>
     </div>
   </div>`,
@@ -337,6 +337,7 @@ const ChapterList = {
     const items = ref([]); const total = ref(0); const page = ref(1); const loading = ref(false); const selected = ref([]);
     const showBatch = ref(false); const batchTitles = ref(''); const batching = ref(false);
     const load = async () => { loading.value = true; try { const r = await API.get('/novels/' + props.novelId + '/chapters', { params: { page: page.value, size: 50 } }); items.value = r.data.items; total.value = r.data.total; } catch (e) {} loading.value = false; };
+    const router = useRouter();
     const addOne = () => $router.push('/novels/' + props.novelId + '/chapters/new');
     const del = async (id) => { try { await API.delete('/novels/' + props.novelId + '/chapters/' + id); ElMessage.success('已删除'); load(); } catch (e) { ElMessage.error('删除失败'); } };
     const batchDel = async () => { try { await API.post('/novels/' + props.novelId + '/chapters/batch', { ids: selected.value }, { params: { _method: 'DELETE' } }); ElMessage.success('已删除'); load(); } catch (e) { try { await axios({ method: 'DELETE', url: '/api/v1/novels/' + props.novelId + '/chapters/batch', data: { ids: selected.value }, headers: { Authorization: 'Bearer ' + atok() } }); ElMessage.success('已删除'); load(); } catch (e2) { ElMessage.error('删除失败'); } } };
@@ -348,7 +349,7 @@ const ChapterList = {
       batching.value = false;
     };
     onMounted(load);
-    return { items, total, page, loading, selected, showBatch, batchTitles, batching, load, addOne, del, batchDel, batchCreate, $router };
+    return { items, total, page, loading, selected, showBatch, batchTitles, batching, load, addOne, del, batchDel, batchCreate };
   }
 };
 
@@ -365,7 +366,7 @@ const ChapterEditor = {
         <el-form-item label="发布"><el-switch v-model="f.is_published" active-text="已发布" inactive-text="草稿"/></el-form-item>
         <el-form-item label="内容"><el-input v-model="f.content" type="textarea" :rows="18"/></el-form-item>
         <el-form-item><span style="color:#909399;font-size:13px">字数: {{wordCount}}</span></el-form-item>
-        <el-form-item><el-button type="primary" @click="save" :loading="saving">保存</el-button><el-button @click="$router.back()">取消</el-button></el-form-item>
+        <el-form-item><el-button type="primary" @click="save" :loading="saving">保存</el-button><el-button @click="router.back()">取消</el-button></el-form-item>
       </el-form>
     </div>
   </div>`,
@@ -374,7 +375,7 @@ const ChapterEditor = {
     const f = reactive({ title: '', sort_order: undefined, is_published: true, content: '' });
     const saving = ref(false);
     const wordCount = computed(() => { const t = f.content || ''; const cn = (t.match(/[一-鿿]/g) || []).length; const en = (t.match(/[a-zA-Z]+/g) || []).length; return cn + en; });
-    const loadCh = async () => { try { const r = await API.get('/novels/' + props.novelId + '/chapters/' + props.chapterId); Object.assign(f, r.data); } catch (e) { ElMessage.error('章节不存在'); $router.back(); } };
+    const loadCh = async () => { try { const r = await API.get('/novels/' + props.novelId + '/chapters/' + props.chapterId); Object.assign(f, r.data); } catch (e) { ElMessage.error('章节不存在'); router.back(); } };
     const save = async () => {
       if (!f.title) return ElMessage.warning('请输入标题');
       saving.value = true;
@@ -616,7 +617,6 @@ const Cache = {
 // ── Router ────────────────────────────────────────────────────────────────
 const routes = [
   { path: '/', redirect: '/dashboard' },
-  { path: '/login', component: LoginPage, meta: { title: '登录' } },
   { path: '/dashboard', component: Dashboard, meta: { title: '控制台' } },
   { path: '/novels', component: NovelList, meta: { title: '小说管理' } },
   { path: '/novels/create', component: NovelForm, props: { id: 'create' }, meta: { title: '新建小说' } },
@@ -631,10 +631,14 @@ const routes = [
   { path: '/cache', component: Cache, meta: { title: '缓存运维' } },
 ];
 const router = createRouter({ history: createWebHashHistory(), routes });
-router.beforeEach((to, from) => { if (to.path !== '/login' && !atok()) return '/login'; if (to.path === '/login' && atok()) return '/dashboard'; });
 
 // ── App ───────────────────────────────────────────────────────────────────
-const AppC = { template: '<router-view/>' };
+// Register components globally before app creation
+const AppC = {
+  template: '<login-page v-if="!loggedIn"/><main-layout v-else/>',
+  components: { LoginPage, MainLayout },
+  setup() { const loggedIn = computed(() => !!atok()); return { loggedIn }; }
+};
 const app = createApp(AppC);
 app.use(router); app.use(ElementPlus);
 for (const [k, v] of Object.entries(Icons)) app.component(k, v);
