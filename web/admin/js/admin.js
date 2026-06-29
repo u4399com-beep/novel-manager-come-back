@@ -615,17 +615,30 @@ const Sites = {
     const load = async () => { ld.value = true; try { const r = await API.get('/sites'); items.value = r.data; } catch(e) {} ld.value = false; };
     const open = (row) => {
       editing.value = !!row;
+      const df = defaultForm();
       if (row) {
-        const data = {
-          ...defaultForm(),
-          ...row,
-          url_patterns:{...defaultForm().url_patterns, ...(row.url_patterns||{})},
-          chapter_pagination:{...defaultForm().chapter_pagination, ...(row.chapter_pagination||{})},
-          link_wheel:{...defaultForm().link_wheel, ...(row.link_wheel||{})},
-          recommend_modules: typeof row.recommend_modules === 'string' ? defaultForm().recommend_modules : {...defaultForm().recommend_modules, ...(row.recommend_modules||{})}
-        };
-        Object.assign(f, data);
-      } else { Object.assign(f, defaultForm()); tab.value = 'basic'; }
+        f.id = row.id || '';
+        f.name = row.name || '';
+        f.domain = row.domain || '';
+        f.template = row.template || 'default';
+        f.language = row.language || 'zh';
+        f.offset_val = row.offset_val || 0;
+        f.is_active = row.is_active !== false;
+        f.translate_enabled = row.translate_enabled !== false;
+        f.description = row.description || '';
+        try { f.url_patterns = typeof row.url_patterns === 'string' ? JSON.parse(row.url_patterns) : (row.url_patterns || df.url_patterns); } catch(e) { f.url_patterns = df.url_patterns; }
+        try { f.chapter_pagination = typeof row.chapter_pagination === 'string' ? JSON.parse(row.chapter_pagination) : (row.chapter_pagination || df.chapter_pagination); } catch(e) { f.chapter_pagination = df.chapter_pagination; }
+        try { f.link_wheel = typeof row.link_wheel === 'string' ? JSON.parse(row.link_wheel) : (row.link_wheel || df.link_wheel); } catch(e) { f.link_wheel = df.link_wheel; }
+        try { f.recommend_modules = typeof row.recommend_modules === 'string' ? JSON.parse(row.recommend_modules) : (row.recommend_modules || df.recommend_modules); } catch(e) { f.recommend_modules = df.recommend_modules; }
+      } else {
+        f.id = ''; f.name = ''; f.domain = ''; f.template = 'default'; f.language = 'zh';
+        f.offset_val = 0; f.is_active = true; f.translate_enabled = true; f.description = '';
+        f.url_patterns = {...df.url_patterns};
+        f.chapter_pagination = {...df.chapter_pagination};
+        f.link_wheel = {...df.link_wheel};
+        f.recommend_modules = JSON.parse(JSON.stringify(df.recommend_modules));
+        tab.value = 'basic';
+      }
       dlg.value = true;
     };
     const save = async () => {
@@ -635,15 +648,16 @@ const Sites = {
         const payload = {
           name:f.name, domain:f.domain, template:f.template, language:f.language,
           offset_val:f.offset_val, is_active:f.is_active, translate_enabled:f.translate_enabled,
-          description:f.description, url_patterns:JSON.stringify(f.url_patterns),
-          chapter_pagination:JSON.stringify(f.chapter_pagination),
-          link_wheel:JSON.stringify(f.link_wheel),
-          recommend_modules:JSON.stringify(f.recommend_modules)
+          description:f.description,
+          url_patterns:f.url_patterns,
+          chapter_pagination:f.chapter_pagination,
+          link_wheel:f.link_wheel,
+          recommend_modules:f.recommend_modules
         };
         if (editing.value) await API.put('/sites/'+f.id, payload);
         else await API.post('/sites', payload);
         ElMessage.success(editing.value?'已保存':'创建成功'); dlg.value = false; load();
-      } catch(e) { ElMessage.error('操作失败'); }
+      } catch(e) { ElMessage.error('操作失败: '+(e.response?.data?.error||e.message)); }
       saving.value = false;
     };
     const del = async (id) => { try { await API.delete('/sites/'+id); ElMessage.success('已删除'); load(); } catch(e) {} };
