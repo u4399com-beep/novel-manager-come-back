@@ -100,7 +100,16 @@ func ListNovels(ctx context.Context, params NovelListParams) (*NovelListResult, 
 	}
 	defer rows.Close()
 
-	novels, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Novel])
+	var novels []models.Novel
+	for rows.Next() {
+		var n models.Novel
+		if err := rows.Scan(&n.ID, &n.Title, &n.Author, &n.Description, &n.CoverImageURL, &n.SourceURL, &n.SourceName, &n.Status, &n.TotalChapters, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		novels = append(novels, n)
+	}
+	rows.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -226,4 +235,32 @@ func SaveCoverImage(cfg *config.Config, fileContent []byte, filename string) (st
 		return "", err
 	}
 	return "/static/covers/" + storedName, nil
+}
+
+// scanNovels scans rows into a []models.Novel slice (handles pgx RowToStructByName limitation).
+func scanNovels(rows pgx.Rows) ([]models.Novel, error) {
+	var novels []models.Novel
+	defer rows.Close()
+	for rows.Next() {
+		var n models.Novel
+		if err := rows.Scan(&n.ID, &n.Title, &n.Author, &n.Description, &n.CoverImageURL, &n.SourceURL, &n.SourceName, &n.Status, &n.TotalChapters, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			return nil, err
+		}
+		novels = append(novels, n)
+	}
+	return novels, nil
+}
+
+// scanChapters scans rows into a []models.Chapter slice.
+func scanChapters(rows pgx.Rows) ([]models.Chapter, error) {
+	var chapters []models.Chapter
+	defer rows.Close()
+	for rows.Next() {
+		var c models.Chapter
+		if err := rows.Scan(&c.ID, &c.NovelID, &c.Title, &c.Content, &c.ContentFile, &c.Volume, &c.SortOrder, &c.WordCount, &c.SourceURL, &c.IsPublished, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		chapters = append(chapters, c)
+	}
+	return chapters, nil
 }

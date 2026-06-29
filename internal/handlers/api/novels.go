@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,7 +43,7 @@ func (r *Router) listNovels(w http.ResponseWriter, req *http.Request) {
 		SortDir:    q.Get("sort_dir"),
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to list novels")
+		writeError(w, http.StatusInternalServerError, "failed to list novels: " + err.Error())
 		return
 	}
 	writeOK(w, result)
@@ -73,7 +74,7 @@ func (r *Router) createNovel(w http.ResponseWriter, req *http.Request) {
 	novel, err := services.CreateNovel(req.Context(), body.Title, body.Author, body.Description,
 		body.SourceURL, body.SourceName, body.Status, body.CategoryIDs)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create novel")
+		log.Printf("CreateNovel error: %v", err); writeError(w, http.StatusInternalServerError, "failed to create novel: "+err.Error())
 		return
 	}
 	writeJSON(w, http.StatusCreated, novel)
