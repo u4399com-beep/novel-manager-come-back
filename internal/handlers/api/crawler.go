@@ -16,17 +16,19 @@ func (r *Router) handleSources(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) handleCrawlTrigger(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost { writeError(w, 405, "POST required"); return }
-	var b struct{ NovelID, SourceName, Mode string }
+	var b struct{ NovelID, SourceName, RuleName, Mode string }
 	if err := json.NewDecoder(req.Body).Decode(&b); err != nil { writeError(w, 400, "invalid JSON"); return }
 	if b.NovelID == "" { writeError(w, 400, "novel_id required"); return }
 	if b.Mode == "" { b.Mode = "direct" }
+	if b.RuleName == "" { b.RuleName = b.SourceName }
+	if b.RuleName == "" { b.RuleName = "23qb" }
 	ctx := req.Context(); pool := database.Pool
 	var exists bool
 	pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM novels WHERE id=$1)", b.NovelID).Scan(&exists)
 	if !exists { writeError(w, 404, "novel not found"); return }
 	var t models.CrawlerTask
-	pool.QueryRow(ctx, "INSERT INTO crawler_tasks (novel_id,status) VALUES ($1,'pending') RETURNING id,novel_id,status,chapters_found,chapters_added,created_at,updated_at", b.NovelID).
-		Scan(&t.ID,&t.NovelID,&t.Status,&t.ChaptersFound,&t.ChaptersAdded,&t.CreatedAt,&t.UpdatedAt)
+	pool.QueryRow(ctx, "INSERT INTO crawler_tasks (novel_id,status,rule_name) VALUES ($1,'pending',$2) RETURNING id,novel_id,status,rule_name,chapters_found,chapters_added,created_at,updated_at", b.NovelID, b.RuleName).
+		Scan(&t.ID,&t.NovelID,&t.Status,&t.RuleName,&t.ChaptersFound,&t.ChaptersAdded,&t.CreatedAt,&t.UpdatedAt)
 	writeJSON(w, 202, t)
 }
 
@@ -41,7 +43,7 @@ func (r *Router) handleCrawlTasks(w http.ResponseWriter, req *http.Request) {
 	var total int64
 	pool.QueryRow(ctx, "SELECT COUNT(*) FROM crawler_tasks"+where, args...).Scan(&total)
 	args = append(args, size, (page-1)*size)
-	rows, _ := pool.Query(ctx, "SELECT id,novel_id,status,chapters_found,chapters_added,error_message,started_at,finished_at,created_at,updated_at FROM crawler_tasks"+where+" ORDER BY created_at DESC LIMIT $"+strconv.Itoa(n)+" OFFSET $"+strconv.Itoa(n+1), args...)
+	rows, _ := pool.Query(ctx, "SELECT id,novel_id,status,rule_name,chapters_found,chapters_added,error_message,started_at,finished_at,created_at,updated_at FROM crawler_tasks"+where+" ORDER BY created_at DESC LIMIT $"+strconv.Itoa(n)+" OFFSET $"+strconv.Itoa(n+1), args...)
 	tasks, _ := pgx.CollectRows(rows, pgx.RowToStructByName[models.CrawlerTask])
 	if rows != nil { rows.Close() }
 	writeOK(w, map[string]interface{}{"items":tasks,"total":total,"page":page,"size":size,"pages":calcPages(total,int64(size))})

@@ -497,12 +497,12 @@ const CrawlerTasks = {
     const tab = ref('single');
     const allNovels = ref([]); const tasks = ref([]); const taskTotal = ref(0); const taskPage = ref(1); const taskLoading = ref(false); const taskStatusFilter = ref(''); const taskSelection = ref([]);
     const singleNovelId = ref(''); const singleSource = ref('23qb'); const singleMode = ref('direct'); const singleLoading = ref(false);
-    const batchIds = ref([]); const batchSource = ref('23qb'); const batchLoading = ref(false);
+    const batchIds = ref([]); const batchSource = ref('23qb'); const batchLoading = ref(false); const ruleList = ref([]);
     const rangeSource = ref('23qb'); const rangeFrom = ref(1); const rangeTo = ref(100);
     const taskStatusType = (s) => ({ pending: 'info', running: 'warning', completed: 'success', failed: 'danger' }[s] || 'info');
     const loadNovels = async () => { try { const r = await API.get('/novels', { params: { size: 200 } }); allNovels.value = r.data.items; } catch (e) {} };
     const loadTasks = async () => { taskLoading.value = true; try { const r = await API.get('/crawler/tasks', { params: { page: taskPage.value, status: taskStatusFilter.value || undefined } }); tasks.value = r.data.items; taskTotal.value = r.data.total; } catch (e) {} taskLoading.value = false; };
-    const triggerSingle = async () => { if (!singleNovelId.value) return ElMessage.warning('请选择小说'); singleLoading.value = true; try { await API.post('/crawler/trigger', { novel_id: singleNovelId.value, source_name: singleSource.value, mode: singleMode.value }); ElMessage.success('任务已创建'); loadTasks(); } catch (e) { ElMessage.error(e.response?.data?.error || '失败'); } singleLoading.value = false; };
+    const triggerSingle = async () => { if (!singleNovelId.value) return ElMessage.warning('请选择小说'); singleLoading.value = true; try { await API.post('/crawler/trigger', { novel_id: singleNovelId.value, source_name: singleSource.value, rule_name: singleSource.value, mode: singleMode.value }); ElMessage.success('任务已创建'); loadTasks(); } catch (e) { ElMessage.error(e.response?.data?.error || '失败'); } singleLoading.value = false; };
     const triggerBatch = async () => { if (!batchIds.value.length) return; batchLoading.value = true; try { await API.post('/crawler/trigger-batch', { novel_ids: batchIds.value, source_name: batchSource.value }); ElMessage.success('批量任务已创建'); loadTasks(); } catch (e) { ElMessage.error('失败'); } batchLoading.value = false; };
     const queueRange = async () => { try { await API.post('/crawler/tasks/queue-range', { source_name: rangeSource.value, book_from: rangeFrom.value, book_to: rangeTo.value }); ElMessage.success('已创建并排队'); loadTasks(); } catch (e) { ElMessage.error('失败'); } };
     const taskAction = async (id, action) => {
@@ -513,7 +513,7 @@ const CrawlerTasks = {
       } catch (e) { ElMessage.error('操作失败'); }
     };
     const batchDelTasks = async () => { try { await ElMessageBox.confirm('确定删除选中任务?', '警告', { type: 'warning' }); for (const id of taskSelection.value) { try { await API.delete('/crawler/tasks/' + id); } catch (e) {} } ElMessage.success('已删除'); loadTasks(); } catch (e) {} };
-    onMounted(() => { loadNovels(); loadTasks(); });
+    onMounted(() => { loadNovels(); loadTasks(); API.get('/rules').then(r => ruleList.value = r.data || []).catch(()=>{}) });
     return { tab, allNovels, tasks, taskTotal, taskPage, taskLoading, taskStatusFilter, taskSelection, singleNovelId, singleSource, singleMode, singleLoading, batchIds, batchSource, batchLoading, rangeSource, rangeFrom, rangeTo, taskStatusType, loadTasks, triggerSingle, triggerBatch, queueRange, taskAction, batchDelTasks };
   }
 };

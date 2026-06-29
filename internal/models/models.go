@@ -64,6 +64,7 @@ type CrawlerTask struct {
 	ID            string         `json:"id"`
 	NovelID       string         `json:"novel_id"`
 	Status        string         `json:"status"`
+	RuleName      string         `json:"rule_name"`
 	ChaptersFound int            `json:"chapters_found"`
 	ChaptersAdded int            `json:"chapters_added"`
 	ErrorMessage  sql.NullString `json:"error_message"`
