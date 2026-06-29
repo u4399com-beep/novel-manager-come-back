@@ -169,10 +169,10 @@ const NovelList = {
       <el-table :data="items" stripe v-loading="loading" @row-click="(r)=>$router.push('/novels/'+r.id)" style="cursor:pointer" @sort-change="onSort">
         <el-table-column prop="title" label="书名" min-width="180" sortable="custom"/>
         <el-table-column prop="author" label="作者" width="120" sortable="custom"/>
-        <el-table-column label="状态" width="80"><template #d="s"><el-tag :type="s.row.status==='ongoing'?'success':s.row.status==='completed'?'info':'warning'" size="small">{{statusMap[s.row.status]||s.row.status}}</el-tag></template></el-table-column>
+        <el-table-column label="状态" width="80"><template #default="s"><el-tag :type="s.row.status==='ongoing'?'success':s.row.status==='completed'?'info':'warning'" size="small">{{statusMap[s.row.status]||s.row.status}}</el-tag></template></el-table-column>
         <el-table-column prop="total_chapters" label="章节" width="80" sortable="custom"/>
-        <el-table-column label="分类" width="150"><template #d="s"><span v-if="(s.row.categories||[]).length">{{s.row.categories.map(c=>c.name).join(', ')}}</span><span v-else>-</span></template></el-table-column>
-        <el-table-column label="操作" width="240" fixed="right"><template #d="s">
+        <el-table-column label="分类" width="150"><template #default="s"><span v-if="(s.row.categories||[]).length">{{s.row.categories.map(c=>c.name).join(', ')}}</span><span v-else>-</span></template></el-table-column>
+        <el-table-column label="操作" width="240" fixed="right"><template #default="s">
           <el-button link type="success" size="small" @click.stop="$router.push('/novels/'+s.row.id+'/chapters')">章节</el-button>
           <el-button link type="primary" size="small" @click.stop="$router.push('/novels/'+s.row.id)">详情</el-button>
           <el-button link size="small" @click.stop="$router.push('/novels/'+s.row.id+'/edit')">编辑</el-button>
@@ -287,9 +287,9 @@ const NovelDetailPage = {
       <h3 style="margin-bottom:12px">最新章节</h3>
       <el-table :data="chapters" stripe>
         <el-table-column prop="sort_order" label="#" width="60"/>
-        <el-table-column prop="title" label="标题" min-width="200"><template #d="s"><a :href="'#/novels/'+novel.id+'/chapters/'+s.row.id" style="color:var(--primary)">{{s.row.title}}</a></template></el-table-column>
+        <el-table-column prop="title" label="标题" min-width="200"><template #default="s"><a :href="'#/novels/'+novel.id+'/chapters/'+s.row.id" style="color:var(--primary)">{{s.row.title}}</a></template></el-table-column>
         <el-table-column prop="word_count" label="字数" width="80"/>
-        <el-table-column label="状态" width="80"><template #d="s"><el-tag :type="s.row.is_published?'success':'info'" size="small">{{s.row.is_published?'已发布':'草稿'}}</el-tag></template></el-table-column>
+        <el-table-column label="状态" width="80"><template #default="s"><el-tag :type="s.row.is_published?'success':'info'" size="small">{{s.row.is_published?'已发布':'草稿'}}</el-tag></template></el-table-column>
       </el-table>
       <div style="margin-top:12px"><el-button @click="$router.push('/novels/'+novel.id+'/chapters')">查看全部章节 →</el-button></div>
     </div>
@@ -319,10 +319,10 @@ const ChapterList = {
       <el-table :data="items" stripe v-loading="loading" @selection-change="s=>selected=s.map(r=>r.id)" ref="tbl">
         <el-table-column type="selection" width="40"/>
         <el-table-column prop="sort_order" label="#" width="60"/>
-        <el-table-column prop="title" label="标题" min-width="220"><template #d="s"><a :href="'#/novels/'+novelId+'/chapters/'+s.row.id" style="color:var(--primary)">{{s.row.title}}</a></template></el-table-column>
+        <el-table-column prop="title" label="标题" min-width="220"><template #default="s"><a :href="'#/novels/'+novelId+'/chapters/'+s.row.id" style="color:var(--primary)">{{s.row.title}}</a></template></el-table-column>
         <el-table-column prop="word_count" label="字数" width="80"/>
-        <el-table-column label="状态" width="80"><template #d="s"><el-tag :type="s.row.is_published?'success':'info'" size="small">{{s.row.is_published?'已发布':'草稿'}}</el-tag></template></el-table-column>
-        <el-table-column label="操作" width="120" fixed="right"><template #d="s">
+        <el-table-column label="状态" width="80"><template #default="s"><el-tag :type="s.row.is_published?'success':'info'" size="small">{{s.row.is_published?'已发布':'草稿'}}</el-tag></template></el-table-column>
+        <el-table-column label="操作" width="120" fixed="right"><template #default="s">
           <el-button link type="primary" size="small" @click="$router.push('/novels/'+novelId+'/chapters/'+s.row.id)">编辑</el-button>
           <el-popconfirm title="确定删除?" @confirm="del(s.row.id)"><template #reference><el-button link type="danger" size="small">删除</el-button></template></el-popconfirm>
         </template></el-table-column>
@@ -403,7 +403,7 @@ const CategoriesC = {
       <el-table :data="items" stripe v-loading="loading">
         <el-table-column prop="id" label="ID" width="60"/><el-table-column prop="name" label="名称" width="150"/>
         <el-table-column prop="slug" label="标识" width="150"/><el-table-column prop="sort_order" label="排序" width="80"/>
-        <el-table-column label="操作" width="160"><template #d="r">
+        <el-table-column label="操作" width="160"><template #default="r">
           <el-button link type="primary" size="small" @click="open(r.row)">编辑</el-button>
           <el-popconfirm title="确定删除?" @confirm="del(r.row.id)"><template #reference><el-button link type="danger" size="small">删除</el-button></template></el-popconfirm>
         </template></el-table-column>
@@ -475,11 +475,11 @@ const CrawlerTasks = {
         <el-button type="danger" :disabled="!taskSelection.length" @click="batchDelTasks">批量删除({{taskSelection.length}})</el-button>
       </div>
       <el-table :data="tasks" stripe v-loading="taskLoading" @selection-change="s=>taskSelection=s.map(r=>r.id)">
-        <el-table-column type="selection" width="36"/><el-table-column label="小说" min-width="140"><template #d="r">{{(r.row.novel_id||'').substring(0,8)}}...</template></el-table-column>
-        <el-table-column label="状态" width="90"><template #d="r"><el-tag :type="taskStatusType(r.row.status)" size="small">{{r.row.status}}</el-tag></template></el-table-column>
+        <el-table-column type="selection" width="36"/><el-table-column label="小说" min-width="140"><template #default="r">{{(r.row.novel_id||'').substring(0,8)}}...</template></el-table-column>
+        <el-table-column label="状态" width="90"><template #default="r"><el-tag :type="taskStatusType(r.row.status)" size="small">{{r.row.status}}</el-tag></template></el-table-column>
         <el-table-column prop="chapters_found" label="发现" width="60"/><el-table-column prop="chapters_added" label="新增" width="60"/>
-        <el-table-column label="错误" min-width="160"><template #d="r"><span style="color:#f56c6c;font-size:12px">{{r.row.error_message?.String||''}}</span></template></el-table-column>
-        <el-table-column label="操作" width="220"><template #d="r">
+        <el-table-column label="错误" min-width="160"><template #default="r"><span style="color:#f56c6c;font-size:12px">{{r.row.error_message?.String||''}}</span></template></el-table-column>
+        <el-table-column label="操作" width="220"><template #default="r">
           <el-button link size="small" @click="taskAction(r.row.id,'start')" v-if="r.row.status==='pending'">启动</el-button>
           <el-button link size="small" type="danger" @click="taskAction(r.row.id,'stop')" v-if="r.row.status==='running'">停止</el-button>
           <el-button link size="small" @click="taskAction(r.row.id,'retry')" v-if="r.row.status==='failed'">重试</el-button>
@@ -524,8 +524,8 @@ const Sites = {
       <el-table :data="items" stripe v-loading="ld" @selection-change="s=>sel=s.map(r=>r.id)">
         <el-table-column type="selection" width="40"/><el-table-column prop="name" label="名称" width="140"/><el-table-column prop="domain" label="域名" width="200"/>
         <el-table-column prop="template" label="模板" width="90"/><el-table-column prop="language" label="语言" width="70"/>
-        <el-table-column label="状态" width="70"><template #d="r"><el-tag :type="r.row.is_active?'success':'danger'" size="small">{{r.row.is_active?'启用':'禁用'}}</el-tag></template></el-table-column>
-        <el-table-column label="操作" width="160"><template #d="r">
+        <el-table-column label="状态" width="70"><template #default="r"><el-tag :type="r.row.is_active?'success':'danger'" size="small">{{r.row.is_active?'启用':'禁用'}}</el-tag></template></el-table-column>
+        <el-table-column label="操作" width="160"><template #default="r">
           <el-button link type="primary" size="small" @click="open(r.row)">编辑</el-button>
           <el-popconfirm title="确定删除?" @confirm="del(r.row.id)"><template #reference><el-button link type="danger" size="small">删除</el-button></template></el-popconfirm>
         </template></el-table-column>
@@ -568,8 +568,8 @@ const LinkRings = {
       <el-table :data="items" stripe v-loading="ld">
         <el-table-column prop="name" label="名称" width="150"/><el-table-column prop="ring_type" label="类型" width="120"/>
         <el-table-column prop="max_links" label="最大" width="70"/><el-table-column prop="display_mode" label="模式" width="80"/>
-        <el-table-column label="目标" width="70"><template #d="r">{{(r.row.targets||[]).length}}</template></el-table-column>
-        <el-table-column label="操作" width="200"><template #d="r">
+        <el-table-column label="目标" width="70"><template #default="r">{{(r.row.targets||[]).length}}</template></el-table-column>
+        <el-table-column label="操作" width="200"><template #default="r">
           <el-button link type="primary" size="small" @click="openRing(r.row)">编辑</el-button>
           <el-button link size="small" @click="manageTargets(r.row)">目标({{(r.row.targets||[]).length}})</el-button>
           <el-popconfirm title="确定删除?" @confirm="delRing(r.row.id)"><template #reference><el-button link type="danger" size="small">删除</el-button></template></el-popconfirm>
