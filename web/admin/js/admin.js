@@ -172,7 +172,8 @@ const NovelList = {
         <el-table-column label="状态" width="80"><template #d="s"><el-tag :type="s.row.status==='ongoing'?'success':s.row.status==='completed'?'info':'warning'" size="small">{{statusMap[s.row.status]||s.row.status}}</el-tag></template></el-table-column>
         <el-table-column prop="total_chapters" label="章节" width="80" sortable="custom"/>
         <el-table-column label="分类" width="150"><template #d="s"><span v-if="(s.row.categories||[]).length">{{s.row.categories.map(c=>c.name).join(', ')}}</span><span v-else>-</span></template></el-table-column>
-        <el-table-column label="操作" width="180" fixed="right"><template #d="s">
+        <el-table-column label="操作" width="240" fixed="right"><template #d="s">
+          <el-button link type="success" size="small" @click.stop="$router.push('/novels/'+s.row.id+'/chapters')">章节</el-button>
           <el-button link type="primary" size="small" @click.stop="$router.push('/novels/'+s.row.id)">详情</el-button>
           <el-button link size="small" @click.stop="$router.push('/novels/'+s.row.id+'/edit')">编辑</el-button>
           <el-popconfirm title="确定删除该小说及所有章节?" @confirm="del(s.row.id)"><template #reference><el-button link type="danger" size="small">删除</el-button></template></el-popconfirm>
@@ -271,6 +272,7 @@ const NovelDetailPage = {
       <div style="margin-top:14px">
         <el-button type="primary" @click="$router.push('/novels/'+novel.id+'/edit')">编辑</el-button>
         <el-button type="success" @click="$router.push('/novels/'+novel.id+'/chapters')">管理章节</el-button>
+        <el-button @click="$router.push('/novels/'+novel.id+'/chapters/new')">+ 新建章节</el-button>
       </div>
     </div>
     <div class="card" style="margin-top:16px" v-if="novel.id">
