@@ -40,8 +40,10 @@ func NewRouter(cfg *config.Config) *Router {
 			}
 			return b
 		},
-		"gt": func(a, b int) bool { return a > b },
-		"eq": func(a, b interface{}) bool { return a == b },
+		"add": func(a, b int) int { return a + b },
+		"gt":  func(a, b int) bool { return a > b },
+		"lt":  func(a, b int) bool { return a < b },
+		"eq":  func(a, b interface{}) bool { return a == b },
 		"truncate": func(s string, n int) string {
 			r := []rune(s)
 			if len(r) <= n {

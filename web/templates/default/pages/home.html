@@ -4,97 +4,161 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{.Title}}</title>
-<meta name="description" content="归来小说CMS - 您的在线小说阅读平台">
+<meta name="description" content="归来小说CMS - 海量小说免费阅读">
 <link rel="stylesheet" href="/static/css/site.css">
 </head>
 <body>
 <header class="site-header">
   <div class="container">
-    <a href="/" class="logo">{{.SiteName}}</a>
-    <nav>
-      <a href="/">首页</a>
+    <a href="/" class="logo">📚 {{.SiteName}}</a>
+    <nav class="main-nav">
+      <a href="/" class="active">首页</a>
       <a href="/novels">书库</a>
-      <a href="/search">搜索</a>
+      {{range .Categories}}
+      {{if lt .ID 5}}<a href="/novels?category={{.ID}}">{{.Name}}</a>{{end}}
+      {{end}}
     </nav>
     <form action="/search" method="GET" class="search-form">
-      <input type="text" name="q" placeholder="搜索小说..." required>
-      <button type="submit">搜索</button>
+      <input type="text" name="q" placeholder="搜书名、作者..." required>
+      <button type="submit">🔍</button>
     </form>
   </div>
 </header>
 
-<main class="container">
+<main>
+  <!-- Hero Banner -->
   {{if .Featured}}
-  <section class="featured-section">
-    <h2>推荐阅读</h2>
-    <div class="novel-grid">
-      {{range .Featured}}
-      <a href="/novel/{{.ID}}" class="novel-card">
-        <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="lazy">
-        <h3>{{.Title}}</h3>
-        <p>{{.Author}}</p>
-      </a>
-      {{end}}
-    </div>
-  </section>
-  {{end}}
-
-  {{if .Categories}}
-  <section class="categories-section">
-    <h2>分类浏览</h2>
-    <div class="category-tags">
-      {{range .Categories}}
-      <a href="/novels?category={{.ID}}" class="tag">{{.Name}}</a>
-      {{end}}
-    </div>
-  </section>
-  {{end}}
-
-  <section class="latest-section">
-    <h2>最近更新</h2>
-    <div class="novel-list">
-      {{range .Novels}}
-      <div class="novel-row">
-        <a href="/novel/{{.ID}}" class="novel-cover-link">
-          <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="lazy">
+  <section class="hero-banner">
+    <div class="container">
+      <div class="hero-grid">
+        {{range $i, $n := .Featured}}
+        {{if lt $i 1}}
+        <a href="/novel/{{.ID}}" class="hero-main">
+          <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="eager">
+          <div class="hero-overlay">
+            <h1>{{.Title}}</h1>
+            <p class="hero-author">{{.Author}} · {{.TotalChapters}}章 · {{statusLabel .Status}}</p>
+            <p class="hero-desc">{{truncate .Description 100}}</p>
+            <span class="hero-btn">立即阅读 →</span>
+          </div>
         </a>
-        <div class="novel-info">
-          <a href="/novel/{{.ID}}"><h3>{{.Title}}</h3></a>
-          <p class="author">{{.Author}}</p>
-          <p class="desc">{{truncate .Description 120}}</p>
+        {{end}}
+        {{end}}
+        <div class="hero-side">
+          {{range $i, $n := .Featured}}
+          {{if and (gt $i 0) (lt $i 5)}}
+          <a href="/novel/{{.ID}}" class="hero-mini">
+            <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="lazy">
+            <div>
+              <strong>{{.Title}}</strong>
+              <span>{{.Author}} · {{.TotalChapters}}章</span>
+            </div>
+          </a>
+          {{end}}
+          {{end}}
         </div>
-        <div class="novel-meta">
-          <span>{{.TotalChapters}} 章</span>
-          <span>{{statusLabel .Status}}</span>
+      </div>
+    </div>
+  </section>
+  {{end}}
+
+  <div class="container home-layout">
+    <!-- Main Content -->
+    <div class="home-main">
+      <!-- Hot Updates -->
+      <section class="home-section">
+        <div class="section-header">
+          <h2>🔥 最新更新</h2>
+          <a href="/novels" class="more-link">查看更多 →</a>
+        </div>
+        <div class="novel-grid-vertical">
+          {{range .Novels}}
+          <a href="/novel/{{.ID}}" class="novel-card-h">
+            <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="lazy">
+            <div class="card-body">
+              <h3>{{.Title}}</h3>
+              <p class="card-author">{{.Author}}</p>
+              <p class="card-desc">{{truncate .Description 80}}</p>
+              <div class="card-meta">
+                <span class="tag-sm">{{statusLabel .Status}}</span>
+                <span>{{.TotalChapters}} 章</span>
+              </div>
+            </div>
+          </a>
+          {{end}}
+        </div>
+        {{if gt .Pages 1}}
+        <div class="pagination">
+          {{range seq .Pages}}
+          <a href="/?page={{.}}" class="page-btn {{if eq . $.Page}}active{{end}}">{{.}}</a>
+          {{end}}
+        </div>
+        {{end}}
+      </section>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="home-sidebar">
+      <!-- Ranking -->
+      {{if .Ranking}}
+      <div class="sidebar-card">
+        <div class="section-header">
+          <h2>🏆 排行榜</h2>
+        </div>
+        <ol class="rank-list">
+          {{range $i, $n := .Ranking}}
+          <li>
+            <span class="rank-num {{if lt $i 3}}top{{$i}}{{end}}">{{add $i 1}}</span>
+            <a href="/novel/{{.ID}}">{{.Title}}</a>
+            <span class="rank-chapters">{{.TotalChapters}}章</span>
+          </li>
+          {{end}}
+        </ol>
+      </div>
+      {{end}}
+
+      <!-- Categories -->
+      {{if .Categories}}
+      <div class="sidebar-card">
+        <div class="section-header">
+          <h2>📂 分类导航</h2>
+        </div>
+        <div class="sidebar-tags">
+          {{range .Categories}}
+          <a href="/novels?category={{.ID}}" class="sidebar-tag">{{.Name}}</a>
+          {{end}}
         </div>
       </div>
       {{end}}
-    </div>
-
-    {{if gt .Pages 1}}
-    <div class="pagination">
-      {{range seq .Pages}}
-      <a href="/?page={{.}}" class="{{if eq . $.Page}}active{{end}}">{{.}}</a>
-      {{end}}
-    </div>
-    {{end}}
-  </section>
-
-  {{if .Ranking}}
-  <aside class="ranking-sidebar">
-    <h2>排行</h2>
-    <ol>
-      {{range .Ranking}}
-      <li><a href="/novel/{{.ID}}">{{.Title}}</a><span>{{.TotalChapters}}章</span></li>
-      {{end}}
-    </ol>
-  </aside>
-  {{end}}
+    </aside>
+  </div>
 </main>
 
 <footer class="site-footer">
   <div class="container">
-    <p>&copy; 2026 归来小说CMS. All rights reserved.</p>
+    <div class="footer-grid">
+      <div>
+        <h3>📚 {{.SiteName}}</h3>
+        <p>海量小说免费在线阅读</p>
+      </div>
+      <div>
+        <h4>导航</h4>
+        <a href="/">首页</a>
+        <a href="/novels">书库</a>
+        <a href="/search">搜索</a>
+      </div>
+      <div>
+        <h4>分类</h4>
+        {{range .Categories}}
+        {{if lt .ID 7}}<a href="/novels?category={{.ID}}">{{.Name}}</a>{{end}}
+        {{end}}
+      </div>
+      <div>
+        <h4>关于</h4>
+        <p>共 {{.Total}} 本小说</p>
+        <p>© 2026 归来小说CMS</p>
+      </div>
+    </div>
   </div>
 </footer>
 </body>
