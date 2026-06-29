@@ -98,7 +98,7 @@ func (r *Router) bookLibrary(w http.ResponseWriter, req *http.Request) {
 	pool.QueryRow(ctx, "SELECT COUNT(*) FROM novels n"+where, args...).Scan(&total)
 	args = append(args, size, (page-1)*size)
 	rows, _ := pool.Query(ctx, fmt.Sprintf("SELECT n.id,n.title,n.author,n.description,n.cover_image_url,n.source_url,n.source_name,n.status,n.total_chapters,n.created_at,n.updated_at FROM novels n%s ORDER BY n.updated_at DESC LIMIT $%d OFFSET $%d", where, n, n+1), args...)
-	novels, _ := pgx.CollectRows(rows, pgx.RowToStructByName[models.Novel])
+	novels, _ := func() ([]models.Novel, error) { var novels []models.Novel; for rows.Next() { var n models.Novel; rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt); novels = append(novels, n) }; return novels, nil }()
 	if rows != nil { rows.Close() }
 	cats, _ := queryCategories(ctx)
 	r.render(w, "home.html", map[string]interface{}{
@@ -121,7 +121,7 @@ func (r *Router) novelDetail(w http.ResponseWriter, req *http.Request) {
 
 	if isChList {
 		rows, _ := pool.Query(ctx, "SELECT id,novel_id,title,content_file,volume,sort_order,word_count,source_url,is_published,created_at,updated_at FROM chapters WHERE novel_id=$1 ORDER BY sort_order ASC", novelID)
-		all, _ := pgx.CollectRows(rows, pgx.RowToStructByName[models.Chapter])
+		all, _ := func() ([]models.Chapter, error) { var chs []models.Chapter; for rows.Next() { var c models.Chapter; rows.Scan(&c.ID,&c.NovelID,&c.Title,&c.ContentFile,&c.Volume,&c.SortOrder,&c.WordCount,&c.SourceURL,&c.IsPublished,&c.CreatedAt,&c.UpdatedAt); chs = append(chs, c) }; return chs, nil }()
 		if rows != nil { rows.Close() }
 		type vg struct{ Title string; Chapters []models.Chapter }
 		var g []vg; cur := vg{Title:"正文"}
@@ -138,7 +138,7 @@ func (r *Router) novelDetail(w http.ResponseWriter, req *http.Request) {
 	}
 
 	rows, _ := pool.Query(ctx, "SELECT id,novel_id,title,content_file,volume,sort_order,word_count,source_url,is_published,created_at,updated_at FROM chapters WHERE novel_id=$1 ORDER BY sort_order DESC LIMIT 15", novelID)
-	chs, _ := pgx.CollectRows(rows, pgx.RowToStructByName[models.Chapter])
+	chs, _ := func() ([]models.Chapter, error) { var chs []models.Chapter; for rows.Next() { var c models.Chapter; rows.Scan(&c.ID,&c.NovelID,&c.Title,&c.ContentFile,&c.Volume,&c.SortOrder,&c.WordCount,&c.SourceURL,&c.IsPublished,&c.CreatedAt,&c.UpdatedAt); chs = append(chs, c) }; return chs, nil }()
 	if rows != nil { rows.Close() }
 	cats, _ := queryCategories(ctx)
 	r.render(w, "novel.html", map[string]interface{}{
@@ -174,7 +174,7 @@ func (r *Router) search(w http.ResponseWriter, req *http.Request) {
 		like := "%"+q+"%"
 		pool.QueryRow(ctx, "SELECT COUNT(*) FROM novels WHERE LOWER(title) LIKE LOWER($1) OR LOWER(author) LIKE LOWER($2)", like, like).Scan(&total)
 		rows, _ := pool.Query(ctx, "SELECT id,title,author,description,cover_image_url,source_url,source_name,status,total_chapters,created_at,updated_at FROM novels WHERE LOWER(title) LIKE LOWER($1) OR LOWER(author) LIKE LOWER($2) ORDER BY updated_at DESC LIMIT 20", like, like)
-		results, _ = pgx.CollectRows(rows, pgx.RowToStructByName[models.Novel])
+		results, _ = func() ([]models.Novel, error) { var novels []models.Novel; for rows.Next() { var n models.Novel; rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt); novels = append(novels, n) }; return novels, nil }()
 		if rows != nil { rows.Close() }
 	}
 	cats, _ := queryCategories(ctx)
@@ -196,14 +196,26 @@ func queryLatestNovels(ctx context.Context, limit int) ([]models.Novel, error) {
 	rows, err := database.Pool.Query(ctx, "SELECT id,title,author,description,cover_image_url,source_url,source_name,status,total_chapters,created_at,updated_at FROM novels ORDER BY updated_at DESC LIMIT $1", limit)
 	if err != nil { return nil, err }
 	defer rows.Close()
-	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Novel])
+	var novels []models.Novel
+	for rows.Next() {
+		var n models.Novel
+		rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt)
+		novels = append(novels, n)
+	}
+	return novels, nil
 }
 
 func queryRanking(ctx context.Context, limit int) ([]models.Novel, error) {
 	rows, err := database.Pool.Query(ctx, "SELECT id,title,author,description,cover_image_url,source_url,source_name,status,total_chapters,created_at,updated_at FROM novels ORDER BY total_chapters DESC LIMIT $1", limit)
 	if err != nil { return nil, err }
 	defer rows.Close()
-	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Novel])
+	var novels []models.Novel
+	for rows.Next() {
+		var n models.Novel
+		rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt)
+		novels = append(novels, n)
+	}
+	return novels, nil
 }
 
 type CatRecGroup struct{ Category models.Category; Novels []models.Novel }
@@ -213,7 +225,7 @@ func queryCatRecs(ctx context.Context, cats []models.Category) []CatRecGroup {
 	for i, cat := range cats {
 		if i >= 6 { break }
 		rows, _ := database.Pool.Query(ctx, `SELECT n.id,n.title,n.author,n.description,n.cover_image_url,n.source_url,n.source_name,n.status,n.total_chapters,n.created_at,n.updated_at FROM novels n JOIN novel_categories nc ON nc.novel_id=n.id WHERE nc.category_id=$1 ORDER BY n.total_chapters DESC LIMIT 4`, cat.ID)
-		novels, _ := pgx.CollectRows(rows, pgx.RowToStructByName[models.Novel])
+		novels, _ := func() ([]models.Novel, error) { var novels []models.Novel; for rows.Next() { var n models.Novel; rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt); novels = append(novels, n) }; return novels, nil }()
 		if rows != nil { rows.Close() }
 		if len(novels) > 0 { recs = append(recs, CatRecGroup{cat, novels}) }
 	}
