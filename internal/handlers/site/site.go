@@ -12,12 +12,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/config"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/database"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/models"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/services"
 )
+
+var reStripHTML = regexp.MustCompile(`<[^>]*>`)
+
+func stripHTMLFn(s string) string {
+	s = strings.ReplaceAll(s, "<br>", "\n")
+	s = strings.ReplaceAll(s, "<br/>", "\n")
+	return strings.TrimSpace(reStripHTML.ReplaceAllString(s, ""))
+}
 
 type Router struct {
 	cfg       *config.Config
@@ -42,11 +49,7 @@ func NewRouter(cfg *config.Config) *Router {
 		"statusLabel": func(s string) string {
 			return map[string]string{"ongoing":"连载中","completed":"已完结","hiatus":"暂停更新"}[s]
 		},
-		"stripHTML": func(s string) string {
-			s = strings.ReplaceAll(s, "<br>", "\n")
-			s = strings.ReplaceAll(s, "<br/>", "\n")
-			return strings.TrimSpace(regexp.MustCompile(`<[^>]*>`).ReplaceAllString(s, ""))
-		},
+		"stripHTML": stripHTMLFn,
 		"splitParagraphs": func(s string) []string {
 			parts := strings.Split(s, "\n"); result := make([]string, 0, len(parts))
 			for _, p := range parts { if p = strings.TrimSpace(p); p != "" { result = append(result, p) } }
@@ -96,6 +99,7 @@ func siteModules(s *models.Site, page, module string) bool {
 
 func (r *Router) home(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path != "/" { http.NotFound(w, req); return }
+	defer func() { if r := recover(); r != nil { log.Printf("HOME PANIC: %v", r) } }()
 	ctx := req.Context()
 	site := r.resolveSite(req)
 
@@ -135,8 +139,8 @@ func (r *Router) bookLibrary(w http.ResponseWriter, req *http.Request) {
 	pool.QueryRow(ctx, "SELECT COUNT(*) FROM novels n"+where, args...).Scan(&total)
 	args = append(args, size, (page-1)*size)
 	rows, _ := pool.Query(ctx, fmt.Sprintf("SELECT n.id,n.title,n.author,n.description,n.cover_image_url,n.source_url,n.source_name,n.status,n.total_chapters,n.created_at,n.updated_at FROM novels n%s ORDER BY n.updated_at DESC LIMIT $%d OFFSET $%d", where, n, n+1), args...)
-	novels, _ := func() ([]models.Novel, error) { var novels []models.Novel; for rows.Next() { var n models.Novel; rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt); novels = append(novels, n) }; return novels, nil }()
-	if rows != nil { rows.Close() }
+	novels := []models.Novel{}
+	if rows != nil { novels, _ = func() ([]models.Novel, error) { var novels []models.Novel; for rows.Next() { var n models.Novel; rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt); novels = append(novels, n) }; return novels, nil }(); rows.Close() }
 	cats, _ := queryCategories(ctx)
 	r.render(w, "home.html", map[string]interface{}{
 		"Title":"归来小说CMS - 书库","Novels":novels,"Categories":cats,
@@ -175,8 +179,11 @@ func (r *Router) novelDetail(w http.ResponseWriter, req *http.Request) {
 	}
 
 	rows, _ := pool.Query(ctx, "SELECT id,novel_id,title,content_file,volume,sort_order,word_count,source_url,is_published,created_at,updated_at FROM chapters WHERE novel_id=$1 ORDER BY sort_order DESC LIMIT 15", novelID)
-	chs, _ := func() ([]models.Chapter, error) { var chs []models.Chapter; for rows.Next() { var c models.Chapter; rows.Scan(&c.ID,&c.NovelID,&c.Title,&c.ContentFile,&c.Volume,&c.SortOrder,&c.WordCount,&c.SourceURL,&c.IsPublished,&c.CreatedAt,&c.UpdatedAt); chs = append(chs, c) }; return chs, nil }()
-	if rows != nil { rows.Close() }
+	chs := []models.Chapter{}
+	if rows != nil {
+		chs, _ = func() ([]models.Chapter, error) { var chs []models.Chapter; for rows.Next() { var c models.Chapter; rows.Scan(&c.ID,&c.NovelID,&c.Title,&c.ContentFile,&c.Volume,&c.SortOrder,&c.WordCount,&c.SourceURL,&c.IsPublished,&c.CreatedAt,&c.UpdatedAt); chs = append(chs, c) }; return chs, nil }()
+		rows.Close()
+	}
 	cats, _ := queryCategories(ctx)
 	r.render(w, "novel.html", map[string]interface{}{
 		"Title":n.Title+" - 归来小说CMS","Novel":n,"Chapters":chs,"Categories":cats,
@@ -226,7 +233,13 @@ func queryCategories(ctx context.Context) ([]models.Category, error) {
 	rows, err := database.Pool.Query(ctx, "SELECT id,name,slug,sort_order,created_at,updated_at FROM categories ORDER BY sort_order")
 	if err != nil { return nil, err }
 	defer rows.Close()
-	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Category])
+	var cats []models.Category
+	for rows.Next() {
+		var c models.Category
+		if err := rows.Scan(&c.ID, &c.Name, &c.Slug, &c.SortOrder, &c.CreatedAt, &c.UpdatedAt); err != nil { return nil, err }
+		cats = append(cats, c)
+	}
+	return cats, rows.Err()
 }
 
 func queryLatestNovels(ctx context.Context, limit int) ([]models.Novel, error) {

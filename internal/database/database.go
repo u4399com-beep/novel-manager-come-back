@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS crawler_tasks (
     chapters_found INT DEFAULT 0,
     chapters_added INT DEFAULT 0,
     error_message TEXT,
+    rule_name VARCHAR(50) DEFAULT '',
     started_at TIMESTAMPTZ,
     finished_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now(),

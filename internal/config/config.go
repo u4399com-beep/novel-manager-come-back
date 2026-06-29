@@ -42,7 +42,7 @@ type Config struct {
 // Load reads configuration from environment with sensible defaults.
 func Load() *Config {
 	cfg := &Config{
-		DatabaseURL:   getEnv("DATABASE_URL", "mysql://root:password@localhost:3306/novel_come_back?charset=utf8mb4&parseTime=true"),
+		DatabaseURL:   getEnv("DATABASE_URL", "postgres://novel:novel123@localhost:5432/novel_come_back?sslmode=disable"),
 		DBPoolSize:    getEnvInt("DB_POOL_SIZE", 20),
 		DBMaxOverflow: getEnvInt("DB_MAX_OVERFLOW", 10),
 		DBPoolRecycle: time.Duration(getEnvInt("DB_POOL_RECYCLE", 3600)) * time.Second,

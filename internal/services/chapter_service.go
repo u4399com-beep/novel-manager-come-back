@@ -174,7 +174,8 @@ func BatchDeleteChapters(ctx context.Context, novelID string, chapterIDs []strin
 
 func ReorderChapters(ctx context.Context, novelID string, orders map[string]int) error {
 	if len(orders) == 0 { return nil }
-	tx, _ := database.Pool.Begin(ctx)
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil { return err }
 	defer tx.Rollback(ctx)
 	for chID, so := range orders {
 		if _, err := tx.Exec(ctx, "UPDATE chapters SET sort_order = $1 WHERE id = $2 AND novel_id = $3", so, chID, novelID); err != nil {

@@ -48,7 +48,7 @@ func (r *Router) handleSites(w http.ResponseWriter, req *http.Request) {
 			 RETURNING id,domain,name,template,offset_val,description,is_active,translate_enabled,language,url_patterns,chapter_pagination,link_wheel,recommend_modules,created_at,updated_at`,
 			domain, name, template, int(offsetVal), desc, isActive, transEnabled, language, urlP, chP, lw, rm,
 		).Scan(&s.ID, &s.Domain, &s.Name, &s.Template, &s.Offset, &s.Description, &s.IsActive, &s.TranslateEnabled, &s.Language, &s.URLPatterns, &s.ChapterPagination, &s.LinkWheel, &s.RecommendModules, &s.CreatedAt, &s.UpdatedAt)
-		if err != nil { writeError(w, 409, "domain exists or invalid data: "+err.Error()); return }
+		if err != nil { writeError(w, 409, "domain exists or invalid data"); return }
 		writeJSON(w, 201, s)
 	default:
 		writeError(w, 405, "GET/POST required")

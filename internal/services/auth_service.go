@@ -40,6 +40,9 @@ func CreateAccessToken(cfg *config.Config, userID, role string) (string, error) 
 
 func ParseAccessToken(cfg *config.Config, tokenStr string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
 		return []byte(cfg.SecretKey), nil
 	})
 	if err != nil {
@@ -82,6 +85,9 @@ func AuthenticateUser(ctx context.Context, username, password string) (*models.U
 		return nil, err
 	}
 	if !CheckPassword(password, u.HashedPassword) {
+		return nil, ErrInvalidCredentials
+	}
+	if !u.IsActive {
 		return nil, ErrInvalidCredentials
 	}
 	return u, nil
