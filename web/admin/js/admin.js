@@ -535,30 +535,121 @@ const Sites = {
         </template></el-table-column>
       </el-table>
     </div>
-    <el-dialog v-model="dlg" :title="editing?'编辑站点':'新建站点'" width="550px">
-      <el-form :model="f" label-width="80px">
-        <el-form-item label="名称"><el-input v-model="f.name"/></el-form-item><el-form-item label="域名"><el-input v-model="f.domain"/></el-form-item>
-        <el-form-item label="模板"><el-input v-model="f.template"/></el-form-item><el-form-item label="语言"><el-input v-model="f.language"/></el-form-item>
-        <el-form-item label="启用"><el-switch v-model="f.is_active"/></el-form-item>
-      </el-form>
+    <el-dialog v-model="dlg" :title="editing?'编辑站点':'新建站点'" width="750px">
+      <el-tabs v-model="tab">
+        <el-tab-pane label="基本信息" name="basic">
+          <el-form :model="f" label-width="100px">
+            <el-form-item label="站点名称"><el-input v-model="f.name"/></el-form-item>
+            <el-form-item label="域名"><el-input v-model="f.domain"/></el-form-item>
+            <el-form-item label="模板"><el-select v-model="f.template"><el-option v-for="t in templates" :key="t" :label="t" :value="t"/></el-select></el-form-item>
+            <el-form-item label="语言"><el-select v-model="f.language"><el-option v-for="l in langs" :key="l" :label="l" :value="l"/></el-select></el-form-item>
+            <el-form-item label="偏移量"><el-input-number v-model="f.offset_val" :min="0" :max="99999"/></el-form-item>
+            <el-form-item label="启用"><el-switch v-model="f.is_active"/></el-form-item>
+            <el-form-item label="翻译"><el-switch v-model="f.translate_enabled"/></el-form-item>
+            <el-form-item label="描述"><el-input v-model="f.description" type="textarea" :rows="2"/></el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="伪静态" name="urls">
+          <el-form :model="f.url_patterns" label-width="120px">
+            <el-form-item label="小说详情"><el-input v-model="f.url_patterns.novel_detail" placeholder="/novel/{id}/"/></el-form-item>
+            <el-form-item label="章节目录"><el-input v-model="f.url_patterns.chapter_list" placeholder="/novel/{id}/chapters/"/></el-form-item>
+            <el-form-item label="章节阅读"><el-input v-model="f.url_patterns.chapter_read" placeholder="/chapter/{id}.html"/></el-form-item>
+            <el-form-item label="分类列表"><el-input v-model="f.url_patterns.category_list" placeholder="/novels?category={id}"/></el-form-item>
+            <el-form-item label="搜索"><el-input v-model="f.url_patterns.search" placeholder="/search?q={keyword}"/></el-form-item>
+            <div style="font-size:12px;color:#909399;margin-left:120px">变量: {id} {keyword}</div>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="章节分页" name="pagination">
+          <el-form :model="f.chapter_pagination" label-width="120px">
+            <el-form-item label="启用分页"><el-switch v-model="f.chapter_pagination.enabled"/></el-form-item>
+            <el-form-item label="分页方式"><el-radio-group v-model="f.chapter_pagination.method"><el-radio value="word_count">按字数</el-radio><el-radio value="page_count">按页数</el-radio></el-radio-group></el-form-item>
+            <el-form-item v-if="f.chapter_pagination.method==='word_count'" label="每页字数"><el-input-number v-model="f.chapter_pagination.words_per_page" :min="500" :max="10000" :step="500"/></el-form-item>
+            <el-form-item v-if="f.chapter_pagination.method==='page_count'" label="固定页数"><el-input-number v-model="f.chapter_pagination.pages_per_chapter" :min="2" :max="10"/></el-form-item>
+            <el-form-item label="页码参数"><el-input v-model="f.chapter_pagination.page_param"/></el-form-item>
+            <el-form-item label="首页无参数"><el-switch v-model="f.chapter_pagination.canonical_first_page"/></el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="链轮" name="linkwheel">
+          <el-form :model="f.link_wheel" label-width="120px">
+            <el-form-item label="启用链轮"><el-switch v-model="f.link_wheel.enabled"/></el-form-item>
+            <el-form-item label="每页最大"><el-input-number v-model="f.link_wheel.max_links_per_page" :min="1" :max="50"/></el-form-item>
+            <el-form-item label="展示位置"><el-select v-model="f.link_wheel.link_section"><el-option label="侧边栏" value="sidebar"/><el-option label="底部" value="footer"/><el-option label="内联" value="inline"/></el-select></el-form-item>
+            <el-form-item label="新窗口"><el-switch v-model="f.link_wheel.open_new_tab"/></el-form-item>
+            <el-form-item label="nofollow"><el-switch v-model="f.link_wheel.nofollow"/></el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="推荐模块" name="recommend">
+          <el-form label-width="140px">
+            <h4 style="margin-bottom:8px">🏠 首页</h4>
+            <el-form-item label="轮播图"><el-switch v-model="f.recommend_modules.home.hero_carousel.enabled"/></el-form-item>
+            <el-form-item label="分类区块"><el-switch v-model="f.recommend_modules.home.category_sections.enabled"/></el-form-item>
+            <el-form-item label="最新更新"><el-switch v-model="f.recommend_modules.home.latest_updates.enabled"/></el-form-item>
+            <el-form-item label="热门排行"><el-switch v-model="f.recommend_modules.home.hot_ranking.enabled"/></el-form-item>
+            <el-form-item label="友情链接"><el-switch v-model="f.recommend_modules.home.friend_links.enabled"/></el-form-item>
+            <el-form-item label="链轮"><el-switch v-model="f.recommend_modules.home.link_wheel.enabled"/></el-form-item>
+            <h4 style="margin-bottom:8px">📖 小说详情</h4>
+            <el-form-item label="友情链接"><el-switch v-model="f.recommend_modules.novel_detail.friend_links.enabled"/></el-form-item>
+            <el-form-item label="链轮"><el-switch v-model="f.recommend_modules.novel_detail.link_wheel.enabled"/></el-form-item>
+            <h4 style="margin-bottom:8px">📄 章节阅读</h4>
+            <el-form-item label="随机推荐"><el-switch v-model="f.recommend_modules.chapter_read.random_recommend.enabled"/></el-form-item>
+            <el-form-item label="阅读工具栏"><el-switch v-model="f.recommend_modules.chapter_read.reader_toolbar.enabled"/></el-form-item>
+            <el-form-item label="链轮"><el-switch v-model="f.recommend_modules.chapter_read.link_wheel.enabled"/></el-form-item>
+          </el-form>
+        </el-tab-pane>
+      </el-tabs>
       <template #footer><el-button @click="dlg=false">取消</el-button><el-button type="primary" @click="save" :loading="saving">{{editing?'保存':'创建'}}</el-button></template>
     </el-dialog>
   </div>`,
   setup() {
-    const items = ref([]); const ld = ref(false); const dlg = ref(false); const editing = ref(false); const saving = ref(false); const sel = ref([]);
-    const f = reactive({ id: '', name: '', domain: '', template: 'default', language: 'zh', is_active: true });
-    const load = async () => { ld.value = true; try { const r = await API.get('/sites'); items.value = r.data; } catch (e) {} ld.value = false; };
-    const open = (row) => { editing.value = !!row; Object.assign(f, row || { id: '', name: '', domain: '', template: 'default', language: 'zh', is_active: true }); dlg.value = true; };
+    const items = ref([]); const ld = ref(false); const dlg = ref(false); const editing = ref(false); const saving = ref(false); const sel = ref([]); const tab = ref('basic');
+    const templates = ['default','biquge','teezi','quanben5','xiangshu','qudu','daquan'];
+    const langs = 'zh en ja ko fr de es pt ru ar th vi id it tr hi fa cs da nl fi el he hu ga pl sk sv uk az'.split(' ');
+    const defaultForm = () => ({
+      id:'',name:'',domain:'',template:'default',language:'zh',offset_val:0,is_active:true,translate_enabled:true,description:'',
+      url_patterns:{novel_detail:'',chapter_list:'',chapter_read:'',category_list:'',search:''},
+      chapter_pagination:{enabled:false,method:'word_count',words_per_page:3000,pages_per_chapter:3,page_param:'page',canonical_first_page:true},
+      link_wheel:{enabled:false,max_links_per_page:8,link_section:'sidebar',open_new_tab:true,nofollow:false},
+      recommend_modules:{home:{hero_carousel:{enabled:true},category_sections:{enabled:true},latest_updates:{enabled:true},hot_ranking:{enabled:true},friend_links:{enabled:true},link_wheel:{enabled:true}},novel_detail:{friend_links:{enabled:true},link_wheel:{enabled:true}},chapter_read:{random_recommend:{enabled:true},reader_toolbar:{enabled:true},link_wheel:{enabled:true}}}
+    });
+    const f = reactive(defaultForm());
+    const load = async () => { ld.value = true; try { const r = await API.get('/sites'); items.value = r.data; } catch(e) {} ld.value = false; };
+    const open = (row) => {
+      editing.value = !!row;
+      if (row) {
+        const data = {
+          ...defaultForm(),
+          ...row,
+          url_patterns:{...defaultForm().url_patterns, ...(row.url_patterns||{})},
+          chapter_pagination:{...defaultForm().chapter_pagination, ...(row.chapter_pagination||{})},
+          link_wheel:{...defaultForm().link_wheel, ...(row.link_wheel||{})},
+          recommend_modules: typeof row.recommend_modules === 'string' ? defaultForm().recommend_modules : {...defaultForm().recommend_modules, ...(row.recommend_modules||{})}
+        };
+        Object.assign(f, data);
+      } else { Object.assign(f, defaultForm()); tab.value = 'basic'; }
+      dlg.value = true;
+    };
     const save = async () => {
       if (!f.name || !f.domain) return ElMessage.warning('名称和域名必填');
       saving.value = true;
-      try { if (editing.value) await API.put('/sites/' + f.id, f); else await API.post('/sites', f); ElMessage.success(editing.value ? '已保存' : '创建成功'); dlg.value = false; load(); } catch (e) { ElMessage.error('操作失败'); }
+      try {
+        const payload = {
+          name:f.name, domain:f.domain, template:f.template, language:f.language,
+          offset_val:f.offset_val, is_active:f.is_active, translate_enabled:f.translate_enabled,
+          description:f.description, url_patterns:JSON.stringify(f.url_patterns),
+          chapter_pagination:JSON.stringify(f.chapter_pagination),
+          link_wheel:JSON.stringify(f.link_wheel),
+          recommend_modules:JSON.stringify(f.recommend_modules)
+        };
+        if (editing.value) await API.put('/sites/'+f.id, payload);
+        else await API.post('/sites', payload);
+        ElMessage.success(editing.value?'已保存':'创建成功'); dlg.value = false; load();
+      } catch(e) { ElMessage.error('操作失败'); }
       saving.value = false;
     };
-    const del = async (id) => { try { await API.delete('/sites/' + id); ElMessage.success('已删除'); load(); } catch (e) {} };
-    const batchDel = async () => { try { await ElMessageBox.confirm('确定删除?', '警告', { type: 'warning' }); for (const id of sel.value) { try { await API.delete('/sites/' + id); } catch (e) {} } ElMessage.success('已删除'); load(); } catch (e) {} };
+    const del = async (id) => { try { await API.delete('/sites/'+id); ElMessage.success('已删除'); load(); } catch(e) {} };
+    const batchDel = async () => { try { await ElMessageBox.confirm('确定删除?','警告',{type:'warning'}); for (const id of sel.value) { try { await API.delete('/sites/'+id); } catch(e) {} } ElMessage.success('已删除'); load(); } catch(e) {} };
     onMounted(load);
-    return { items, ld, dlg, editing, saving, sel, f, open, save, del, batchDel };
+    return { items,ld,dlg,editing,saving,sel,tab,templates,langs,f,load,open,save,del,batchDel };
   }
 };
 
