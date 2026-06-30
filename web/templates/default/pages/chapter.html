@@ -7,13 +7,18 @@
 <link rel="stylesheet" href="/static/css/site.css">
 </head>
 <body class="chapter-page">
+<div class="sticky-head">
 <header class="site-header">
   <div class="container">
     <a href="/" class="logo">{{.SiteName}}</a>
     <nav><a href="/">首页</a><a href="/novels">书库</a></nav>
   </div>
 </header>
-
+<nav class="breadcrumb">
+    <a href="/">首页</a><span>›</span>
+    <a href="/novel/{{.Novel.ID}}">{{.Novel.Title}}</a><span>›</span>
+    <span>{{.Chapter.Title}}</span>
+  </nav>
 <!-- Reading Toolbar -->
 <div class="reader-toolbar" id="toolbar">
   <div class="toolbar-inner">
@@ -48,16 +53,9 @@
     </div>
   </div>
 </div>
+</div>
 
 <main class="container chapter-reader" id="chapter-reader">
-  <nav class="breadcrumb">
-    <a href="/">首页</a>
-    <span>›</span>
-    <a href="/novel/{{.Novel.ID}}">{{.Novel.Title}}</a>
-    <span>›</span>
-    <span>{{.Chapter.Title}}</span>
-  </nav>
-
   <div class="chapter-nav top-nav">
     {{if .PrevID}}<a href="/chapter/{{.PrevID}}" class="btn">← {{.PrevT}}</a>{{end}}
     <a href="/novel/{{.Novel.ID}}">目录</a>

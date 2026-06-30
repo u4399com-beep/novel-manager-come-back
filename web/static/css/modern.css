@@ -6,8 +6,10 @@ body{font-family:"Inter","PingFang SC","Microsoft YaHei",sans-serif;color:var(--
 a{color:var(--c1);text-decoration:none;transition:color .15s}
 a:hover{color:var(--link)}
 
+/* Sticky head — navbar+breadcrumb+toolbar as one unit */
+.sticky-head{position:sticky;top:0;z-index:100}
 /* Topbar */
-.topbar{background:#fff;border-bottom:1px solid var(--c4);position:sticky;top:0;z-index:100}
+.topbar{background:#fff;border-bottom:1px solid var(--c4)}
 .topbar .wrap{display:flex;align-items:center;height:56px;gap:20px}
 .brand{font-size:20px;font-weight:800;color:var(--link);letter-spacing:-.5px}
 .topnav{display:flex;gap:0;flex:1}
@@ -141,9 +143,8 @@ a:hover{color:var(--link)}
   .chapter-reader{padding:16px}
 }
 
-/* Sticky breadcrumb below navbar */
-.breadcrumb{position:sticky;top:56px;z-index:49;background:#fff;border-bottom:1px solid var(--c4);margin-bottom:0;padding:8px 0}
-
-/* Sticky toolbar below breadcrumb — all 3 form a single unit */
-.reader-toolbar{position:sticky;top:90px;z-index:48}
+/* Breadcrumb — inside sticky-head, no separate sticky needed */
+.breadcrumb{background:#fff;border-bottom:1px solid var(--c4);padding:8px 0}
+/* Toolbar — inside sticky-head, no separate sticky needed */
+.reader-toolbar{background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--c4)}
 .toolbar-inner{max-width:780px;margin:0 auto}
