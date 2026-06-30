@@ -119,12 +119,21 @@
         </div>
         {{end}}
 
+        {{if .Novels}}
+        <div class="side-box">
+          <h3>🏆 本类热门</h3>
+          <ol class="hotlist">
+            {{range $i, $n := .CatRanking}}
+            <li><span class="rank {{if lt $i 3}}top{{$i}}{{end}}">{{add $i 1}}</span><a href="/novel/{{.ID}}">{{.Title}}</a></li>
+            {{end}}
+          </ol>
+        </div>
+        {{else}}
         <div class="side-box">
           <h3>📊 站点统计</h3>
-          <div class="stats-row">
-            <div class="stat"><strong>{{.Total}}</strong><span>本小说</span></div>
-          </div>
+          <div class="stats-row"><div class="stat"><strong>{{.Total}}</strong><span>本小说</span></div></div>
         </div>
+        {{end}}
 
         {{if .Categories}}
         <div class="side-box">
