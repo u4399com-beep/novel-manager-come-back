@@ -59,8 +59,8 @@
   {{end}}
 
   <div class="wrap">
-    <div class="main-grid">
-      <!-- Left: Category Sections or Book Library -->
+    {{if .Novels}}<div class="lib-fullwidth">{{end}}
+    <div class="main-grid" {{if .Novels}}style="grid-template-columns:1fr"{{end}}>
       <div class="content-area">
         {{if .Novels}}
         <section class="cat-block">
@@ -79,6 +79,14 @@
           <ol class="lib-grid">{{range .LibraryList}}<li><a href="/novel/{{.ID}}">{{.Title}}</a><span>{{or .Author "佚名"}} · {{.TotalChapters}}章</span></li>{{end}}</ol>
           {{end}}
           {{if gt .Pages 1}}<div class="pag-ellipsis">{{range paginate .Page .Pages}}<a href="?page={{.Page}}" class="nbtn" style="{{if .Active}}background:var(--link);color:#fff{{end}}">{{.Label}}</a>{{end}}</div>{{end}}
+          {{if .CatRanking}}
+          <div class="cat-hot-strip">
+            <h3>🏆 本类热门</h3>
+            <div class="hot-strip-list">
+              {{range $i, $n := .CatRanking}}<a href="/novel/{{.ID}}"><span class="hs-rank {{if lt $i 3}}top{{end}}">{{add $i 1}}</span>{{.Title}}</a>{{end}}
+            </div>
+          </div>
+          {{end}}
         </section>
         {{end}}
         {{if .CatRecs}}

@@ -85,6 +85,18 @@ a:hover{color:var(--link)}
 @media(max-width:768px){.lib-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:480px){.lib-grid{grid-template-columns:1fr}}
 
+/* Full-width library (no sidebar) */
+.lib-fullwidth .main-grid{max-width:100%}
+.lib-fullwidth .content-area{max-width:100%}
+/* Category Hot Strip */
+.cat-hot-strip{margin-top:24px;padding:16px 20px;background:var(--c5);border-radius:var(--radius)}
+.cat-hot-strip h3{font-size:15px;font-weight:700;margin-bottom:12px}
+.hot-strip-list{display:flex;flex-wrap:wrap;gap:8px 24px}
+.hot-strip-list a{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--c1)}
+.hot-strip-list a:hover{color:var(--link)}
+.hs-rank{width:22px;height:22px;border-radius:50%;background:var(--c4);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--c2);flex-shrink:0}
+.hs-rank.top{background:var(--red);color:#fff}
+
 /* Ellipsis Pagination */
 .pag-ellipsis{display:flex;gap:4px;justify-content:center;margin-top:24px}
 .pag-ellipsis .nbtn{min-width:36px;text-align:center}
