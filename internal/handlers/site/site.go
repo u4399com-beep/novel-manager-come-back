@@ -2,8 +2,6 @@ package site
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -18,6 +16,11 @@ import (
 	"github.com/u4399com-beep/novel-manager-come-back/internal/services"
 )
 
+type Router struct {
+	cfg       *config.Config
+	templates *template.Template
+}
+
 var reStripHTML = regexp.MustCompile(`<[^>]*>`)
 
 func stripHTMLFn(s string) string {
@@ -26,26 +29,18 @@ func stripHTMLFn(s string) string {
 	return strings.TrimSpace(reStripHTML.ReplaceAllString(s, ""))
 }
 
-type Router struct {
-	cfg       *config.Config
-	templates *template.Template
-}
-
 func NewRouter(cfg *config.Config) *Router {
 	r := &Router{cfg: cfg}
 	tplDir := filepath.Join("web", "templates", "default")
 	pattern := filepath.Join(tplDir, "pages", "*.html")
 	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"T": func(key string) string { return key },
-		"seq": func(n int) []int { s := make([]int, n); for i := range s { s[i] = i + 1 }; return s },
 		"or": func(a, b string) string { if a != "" { return a }; return b },
 		"add": func(a, b int) int { return a + b },
-		"gt": func(a, b int) bool { return a > b },
-		"lt": func(a, b int) bool { return a < b },
-		"eq": func(a, b interface{}) bool { return a == b },
-		"truncate": func(s string, n int) string {
-			r := []rune(s); if len(r) <= n { return s }; return string(r[:n]) + "..."
-		},
+		"gt":  func(a, b int) bool { return a > b },
+		"lt":  func(a, b int) bool { return a < b },
+		"eq":  func(a, b interface{}) bool { return a == b },
+		"seq": func(n int) []int { s := make([]int, n); for i := range s { s[i] = i + 1 }; return s },
+		"truncate": func(s string, n int) string { r := []rune(s); if len(r) <= n { return s }; return string(r[:n]) + "..." },
 		"statusLabel": func(s string) string {
 			return map[string]string{"ongoing":"连载中","completed":"已完结","hiatus":"暂停更新"}[s]
 		},
@@ -69,101 +64,108 @@ func (r *Router) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/search", r.search)
 }
 
-// resolveSite looks up the current Site by request Host header.
-func (r *Router) resolveSite(req *http.Request) *models.Site {
-	host := req.Host
-	if idx := strings.Index(host, ":"); idx != -1 { host = host[:idx] }
-	var s models.Site
-	err := database.Pool.QueryRow(req.Context(),
-		"SELECT id,domain,name,template,offset_val,description,is_active,translate_enabled,language,url_patterns,chapter_pagination,link_wheel,recommend_modules,created_at,updated_at FROM sites WHERE domain=$1 AND is_active=true LIMIT 1", host).
-		Scan(&s.ID, &s.Domain, &s.Name, &s.Template, &s.Offset, &s.Description, &s.IsActive, &s.TranslateEnabled, &s.Language, &s.URLPatterns, &s.ChapterPagination, &s.LinkWheel, &s.RecommendModules, &s.CreatedAt, &s.UpdatedAt)
-	if err != nil { return nil }
-	return &s
-}
-
-// siteModules parses recommend_modules JSON for template use.
-func siteModules(s *models.Site, page, module string) bool {
-	if s == nil || s.RecommendModules == "" || s.RecommendModules == "{}" { return true }
-	var mods map[string]map[string]map[string]interface{}
-	json.Unmarshal([]byte(s.RecommendModules), &mods)
-	if mods == nil { return true }
-	pageMods, ok := mods[page]
-	if !ok { return true }
-	mod, ok := pageMods[module]
-	if !ok { return true }
-	if enabled, ok := mod["enabled"]; ok {
-		if b, ok := enabled.(bool); ok { return b }
-	}
-	return true
-}
-
+// ── Home ─────────────────────────────────────────────────────────────────
 func (r *Router) home(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path != "/" { http.NotFound(w, req); return }
-	defer func() { if r := recover(); r != nil { log.Printf("HOME PANIC: %v", r) } }()
 	ctx := req.Context()
-	site := r.resolveSite(req)
 
-	cats, _ := queryCategories(ctx)
-	catRecs := queryCatRecs(ctx, cats)
-	latestNovels, _ := queryLatestNovels(ctx, 30)
-	listItems := buildLatestList(ctx, latestNovels)
-	ranking, _ := queryRanking(ctx, 15)
+	cats := mustCategories(ctx)
+	catRecs := buildCatRecs(ctx, cats)
+	latest, _ := services.ListNovels(ctx, services.NovelListParams{Page:1, Size:30, SortBy:"updated_at", SortDir:"desc"})
+	ranking, _ := services.ListNovels(ctx, services.NovelListParams{Page:1, Size:15, SortBy:"total_chapters", SortDir:"desc"})
+	listItems := buildLatest(ctx, latest.Items)
 	var total int64
 	database.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM novels").Scan(&total)
 
 	r.render(w, "home.html", map[string]interface{}{
 		"Title":"归来小说CMS - 首页","CatRecs":catRecs,"LatestList":listItems,
-		"Ranking":ranking,"Featured":safeSlice(ranking,5),"Categories":cats,"Total":total,
-		"Site": site,
-		"ShowHero": siteModules(site, "home", "hero_carousel"),
-		"ShowCatSections": siteModules(site, "home", "category_sections"),
-		"ShowLatest": siteModules(site, "home", "latest_updates"),
-		"ShowRanking": siteModules(site, "home", "hot_ranking"),
-		"ShowFriendLinks": siteModules(site, "home", "friend_links"),
-		"ShowLinkWheel": siteModules(site, "home", "link_wheel"),
+		"Ranking":ranking.Items,"Featured":safeSlice(ranking.Items,5),"Categories":cats,"Total":total,
 	})
 }
 
+type catGroup struct{ Category models.Category; Novels []models.Novel }
+
+func buildCatRecs(ctx context.Context, cats []models.Category) []catGroup {
+	var recs []catGroup
+	for i, cat := range cats {
+		if i >= 6 { break }
+		r, _ := services.ListNovels(ctx, services.NovelListParams{Page:1, Size:4, CategoryID:&cat.ID, SortBy:"total_chapters", SortDir:"desc"})
+		if len(r.Items) > 0 { recs = append(recs, catGroup{cat, r.Items}) }
+	}
+	return recs
+}
+
+func mustCategories(ctx context.Context) []models.Category {
+	rows, err := database.Pool.Query(ctx, "SELECT id,name,slug,sort_order,created_at,updated_at FROM categories ORDER BY sort_order")
+	if err != nil { return nil }
+	defer rows.Close()
+	var cats []models.Category
+	for rows.Next() {
+		var c models.Category
+		if err := rows.Scan(&c.ID,&c.Name,&c.Slug,&c.SortOrder,&c.CreatedAt,&c.UpdatedAt); err != nil { continue }
+		cats = append(cats, c)
+	}
+	return cats
+}
+
+func buildLatest(ctx context.Context, novels []models.Novel) []map[string]interface{} {
+	if len(novels) == 0 { return nil }
+	ids := make([]string, len(novels))
+	for i, n := range novels { ids[i] = n.ID }
+	rows, err := database.Pool.Query(ctx, `SELECT c.novel_id,c.id,c.title FROM chapters c INNER JOIN (SELECT novel_id,MAX(sort_order) m FROM chapters WHERE novel_id=ANY($1) GROUP BY novel_id) l ON c.novel_id=l.novel_id AND c.sort_order=l.m`, ids)
+	if err != nil || rows == nil { return nil }
+	defer rows.Close()
+	type ci struct{ NID,ID,Title string }
+	chMap := map[string]ci{}
+	for rows.Next() { var x ci; rows.Scan(&x.NID,&x.ID,&x.Title); chMap[x.NID]=x }
+	items := make([]map[string]interface{}, 0, len(novels))
+	for _, n := range novels {
+		catName := ""
+		r2, _ := database.Pool.Query(ctx, "SELECT c.name FROM categories c JOIN novel_categories nc ON nc.category_id=c.id WHERE nc.novel_id=$1 LIMIT 1", n.ID)
+		if r2 != nil { if r2.Next() { r2.Scan(&catName) }; r2.Close() }
+		ch := chMap[n.ID]
+		items = append(items, map[string]interface{}{
+			"Novel":n,"CategoryName":catName,"LatestChapter":ch.Title,"LatestChapterID":ch.ID,
+			"UpdatedMMDD":n.UpdatedAt.Format("01-02"),
+		})
+	}
+	return items
+}
+
+// ── Book Library ────────────────────────────────────────────────────────
 func (r *Router) bookLibrary(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context(); pool := database.Pool
+	ctx := req.Context()
 	page, _ := strconv.Atoi(req.URL.Query().Get("page"))
-	if page < 1 { page = 1 }
-	size := 30; var total int64
-	where := " WHERE 1=1"; args := []interface{}{}; n := 1
-	if c := req.URL.Query().Get("category"); c != "" {
-		where += fmt.Sprintf(" AND n.id IN (SELECT novel_id FROM novel_categories WHERE category_id = $%d)", n); args = append(args, c); n++
-	}
-	if s := req.URL.Query().Get("status"); s != "" {
-		where += fmt.Sprintf(" AND n.status = $%d", n); args = append(args, s); n++
-	}
-	pool.QueryRow(ctx, "SELECT COUNT(*) FROM novels n"+where, args...).Scan(&total)
-	args = append(args, size, (page-1)*size)
-	rows, _ := pool.Query(ctx, fmt.Sprintf("SELECT n.id,n.title,n.author,n.description,n.cover_image_url,n.source_url,n.source_name,n.status,n.total_chapters,n.created_at,n.updated_at FROM novels n%s ORDER BY n.updated_at DESC LIMIT $%d OFFSET $%d", where, n, n+1), args...)
-	novels := []models.Novel{}
-	if rows != nil { novels, _ = func() ([]models.Novel, error) { var novels []models.Novel; for rows.Next() { var n models.Novel; rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt); novels = append(novels, n) }; return novels, nil }(); rows.Close() }
-	cats, _ := queryCategories(ctx)
+	if page < 1 { page = 1 }; size := 30
+	params := services.NovelListParams{Page:page, Size:size, SortBy:"updated_at", SortDir:"desc"}
+	if c := req.URL.Query().Get("category"); c != "" { id, _ := strconv.Atoi(c); params.CategoryID = &id }
+	if s := req.URL.Query().Get("status"); s != "" { params.Status = s }
+	result, _ := services.ListNovels(ctx, params)
+	cats := mustCategories(ctx)
 	r.render(w, "home.html", map[string]interface{}{
-		"Title":"归来小说CMS - 书库","Novels":novels,"Categories":cats,
-		"Page":page,"Total":total,"Pages":pagesFromTotal(total,size),
-		"Featured":safeSlice(novels,5),"Ranking":safeSlice(novels,15),
+		"Title":"归来小说CMS - 书库","Novels":result.Items,"Categories":cats,
+		"Page":page,"Total":result.Total,"Pages":pagesFrom(result.Total, size),
+		"Featured":safeSlice(result.Items,5),"Ranking":safeSlice(result.Items,15),
 	})
 }
 
+// ── Novel Detail ────────────────────────────────────────────────────────
 func (r *Router) novelDetail(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context(); pool := database.Pool
 	path := strings.TrimPrefix(req.URL.Path, "/novel/")
 	if path == "" { http.NotFound(w, req); return }
 	parts := strings.SplitN(path, "/", 2)
-	novelID := parts[0]
-	isChList := len(parts) == 2 && parts[1] == "chapters"
+	novelID := parts[0]; isChList := len(parts) == 2 && parts[1] == "chapters"
 
 	n, err := services.GetNovel(ctx, novelID)
 	if err != nil { http.NotFound(w, req); return }
 
 	if isChList {
-		rows, _ := pool.Query(ctx, "SELECT id,novel_id,title,content_file,volume,sort_order,word_count,source_url,is_published,created_at,updated_at FROM chapters WHERE novel_id=$1 ORDER BY sort_order ASC", novelID)
-		all, _ := func() ([]models.Chapter, error) { var chs []models.Chapter; for rows.Next() { var c models.Chapter; rows.Scan(&c.ID,&c.NovelID,&c.Title,&c.ContentFile,&c.Volume,&c.SortOrder,&c.WordCount,&c.SourceURL,&c.IsPublished,&c.CreatedAt,&c.UpdatedAt); chs = append(chs, c) }; return chs, nil }()
-		if rows != nil { rows.Close() }
+		rows, err := pool.Query(ctx, "SELECT id,novel_id,title,content_file,volume,sort_order,word_count,source_url,is_published,created_at,updated_at FROM chapters WHERE novel_id=$1 ORDER BY sort_order ASC", novelID)
+		if err != nil || rows == nil { http.NotFound(w, req); return }
+		defer rows.Close()
+		var all []models.Chapter
+		for rows.Next() { var c models.Chapter; rows.Scan(&c.ID,&c.NovelID,&c.Title,&c.ContentFile,&c.Volume,&c.SortOrder,&c.WordCount,&c.SourceURL,&c.IsPublished,&c.CreatedAt,&c.UpdatedAt); all = append(all, c) }
 		type vg struct{ Title string; Chapters []models.Chapter }
 		var g []vg; cur := vg{Title:"正文"}
 		for _, c := range all {
@@ -172,24 +174,18 @@ func (r *Router) novelDetail(w http.ResponseWriter, req *http.Request) {
 			cur.Chapters = append(cur.Chapters, c)
 		}
 		g = append(g, cur)
-		r.render(w, "chapter_list.html", map[string]interface{}{
-			"Title":n.Title+" - 章节目录","Novel":n,"AllChapters":all,"Grouped":g,
-		})
+		r.render(w, "chapter_list.html", map[string]interface{}{"Title":n.Title+" - 章节目录","Novel":n,"AllChapters":all,"Grouped":g})
 		return
 	}
 
-	rows, _ := pool.Query(ctx, "SELECT id,novel_id,title,content_file,volume,sort_order,word_count,source_url,is_published,created_at,updated_at FROM chapters WHERE novel_id=$1 ORDER BY sort_order DESC LIMIT 15", novelID)
+	rows, err := pool.Query(ctx, "SELECT id,novel_id,title,content_file,volume,sort_order,word_count,source_url,is_published,created_at,updated_at FROM chapters WHERE novel_id=$1 ORDER BY sort_order DESC LIMIT 15", novelID)
 	chs := []models.Chapter{}
-	if rows != nil {
-		chs, _ = func() ([]models.Chapter, error) { var chs []models.Chapter; for rows.Next() { var c models.Chapter; rows.Scan(&c.ID,&c.NovelID,&c.Title,&c.ContentFile,&c.Volume,&c.SortOrder,&c.WordCount,&c.SourceURL,&c.IsPublished,&c.CreatedAt,&c.UpdatedAt); chs = append(chs, c) }; return chs, nil }()
-		rows.Close()
-	}
-	cats, _ := queryCategories(ctx)
-	r.render(w, "novel.html", map[string]interface{}{
-		"Title":n.Title+" - 归来小说CMS","Novel":n,"Chapters":chs,"Categories":cats,
-	})
+	if err == nil && rows != nil { defer rows.Close(); for rows.Next() { var c models.Chapter; rows.Scan(&c.ID,&c.NovelID,&c.Title,&c.ContentFile,&c.Volume,&c.SortOrder,&c.WordCount,&c.SourceURL,&c.IsPublished,&c.CreatedAt,&c.UpdatedAt); chs = append(chs, c) } }
+	cats := mustCategories(ctx)
+	r.render(w, "novel.html", map[string]interface{}{"Title":n.Title+" - 归来小说CMS","Novel":n,"Chapters":chs,"Categories":cats})
 }
 
+// ── Chapter Reader ──────────────────────────────────────────────────────
 func (r *Router) chapterRead(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context(); pool := database.Pool
 	cid := strings.TrimPrefix(req.URL.Path, "/chapter/")
@@ -206,117 +202,32 @@ func (r *Router) chapterRead(w http.ResponseWriter, req *http.Request) {
 	pool.QueryRow(ctx, "SELECT id,title FROM chapters WHERE novel_id=$1 AND sort_order>$2 ORDER BY sort_order ASC LIMIT 1", ch.NovelID, ch.SortOrder).Scan(&next.ID,&next.Title)
 	if c, _ := services.GetChapterContent(&ch); c != "" { ch.Content = c }
 	r.render(w, "chapter.html", map[string]interface{}{
-		"Title":ch.Title+" - "+n.Title,"Novel":n,"Chapter":ch,
-		"PrevID":prev.ID,"PrevT":prev.Title,"NextID":next.ID,"NextT":next.Title,
+		"Title":ch.Title+" - "+n.Title,"Novel":n,"Chapter":ch,"PrevID":prev.ID,"PrevT":prev.Title,"NextID":next.ID,"NextT":next.Title,
 	})
 }
 
+// ── Search ──────────────────────────────────────────────────────────────
 func (r *Router) search(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context(); pool := database.Pool
 	q := req.URL.Query().Get("q"); var results []models.Novel; var total int64
 	if q != "" {
 		like := "%"+q+"%"
 		pool.QueryRow(ctx, "SELECT COUNT(*) FROM novels WHERE LOWER(title) LIKE LOWER($1) OR LOWER(author) LIKE LOWER($2)", like, like).Scan(&total)
-		rows, _ := pool.Query(ctx, "SELECT id,title,author,description,cover_image_url,source_url,source_name,status,total_chapters,created_at,updated_at FROM novels WHERE LOWER(title) LIKE LOWER($1) OR LOWER(author) LIKE LOWER($2) ORDER BY updated_at DESC LIMIT 20", like, like)
-		results, _ = func() ([]models.Novel, error) { var novels []models.Novel; for rows.Next() { var n models.Novel; rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt); novels = append(novels, n) }; return novels, nil }()
-		if rows != nil { rows.Close() }
+		rows, err := pool.Query(ctx, "SELECT id,title,author,description,cover_image_url,source_url,source_name,status,total_chapters,created_at,updated_at FROM novels WHERE LOWER(title) LIKE LOWER($1) OR LOWER(author) LIKE LOWER($2) ORDER BY updated_at DESC LIMIT 20", like, like)
+		if err == nil && rows != nil { defer rows.Close(); for rows.Next() { var n models.Novel; rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt); results = append(results, n) } }
 	}
-	cats, _ := queryCategories(ctx)
-	r.render(w, "search.html", map[string]interface{}{
-		"Title":"搜索: "+q+" - 归来小说CMS","Query":q,"Results":results,"Total":total,"Categories":cats,
-	})
+	cats := mustCategories(ctx)
+	r.render(w, "search.html", map[string]interface{}{"Title":"搜索: "+q+" - 归来小说CMS","Query":q,"Results":results,"Total":total,"Categories":cats})
 }
 
-// ── query helpers ──────────────────────────────────────────────────────────
-
-func queryCategories(ctx context.Context) ([]models.Category, error) {
-	rows, err := database.Pool.Query(ctx, "SELECT id,name,slug,sort_order,created_at,updated_at FROM categories ORDER BY sort_order")
-	if err != nil { return nil, err }
-	defer rows.Close()
-	var cats []models.Category
-	for rows.Next() {
-		var c models.Category
-		if err := rows.Scan(&c.ID, &c.Name, &c.Slug, &c.SortOrder, &c.CreatedAt, &c.UpdatedAt); err != nil { return nil, err }
-		cats = append(cats, c)
-	}
-	return cats, rows.Err()
-}
-
-func queryLatestNovels(ctx context.Context, limit int) ([]models.Novel, error) {
-	rows, err := database.Pool.Query(ctx, "SELECT id,title,author,description,cover_image_url,source_url,source_name,status,total_chapters,created_at,updated_at FROM novels ORDER BY updated_at DESC LIMIT $1", limit)
-	if err != nil { return nil, err }
-	defer rows.Close()
-	var novels []models.Novel
-	for rows.Next() {
-		var n models.Novel
-		rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt)
-		novels = append(novels, n)
-	}
-	return novels, nil
-}
-
-func queryRanking(ctx context.Context, limit int) ([]models.Novel, error) {
-	rows, err := database.Pool.Query(ctx, "SELECT id,title,author,description,cover_image_url,source_url,source_name,status,total_chapters,created_at,updated_at FROM novels ORDER BY total_chapters DESC LIMIT $1", limit)
-	if err != nil { return nil, err }
-	defer rows.Close()
-	var novels []models.Novel
-	for rows.Next() {
-		var n models.Novel
-		rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt)
-		novels = append(novels, n)
-	}
-	return novels, nil
-}
-
-type CatRecGroup struct{ Category models.Category; Novels []models.Novel }
-
-func queryCatRecs(ctx context.Context, cats []models.Category) []CatRecGroup {
-	recs := make([]CatRecGroup, 0)
-	for i, cat := range cats {
-		if i >= 6 { break }
-		rows, _ := database.Pool.Query(ctx, `SELECT n.id,n.title,n.author,n.description,n.cover_image_url,n.source_url,n.source_name,n.status,n.total_chapters,n.created_at,n.updated_at FROM novels n JOIN novel_categories nc ON nc.novel_id=n.id WHERE nc.category_id=$1 ORDER BY n.total_chapters DESC LIMIT 4`, cat.ID)
-		novels, _ := func() ([]models.Novel, error) { var novels []models.Novel; for rows.Next() { var n models.Novel; rows.Scan(&n.ID,&n.Title,&n.Author,&n.Description,&n.CoverImageURL,&n.SourceURL,&n.SourceName,&n.Status,&n.TotalChapters,&n.CreatedAt,&n.UpdatedAt); novels = append(novels, n) }; return novels, nil }()
-		if rows != nil { rows.Close() }
-		if len(novels) > 0 { recs = append(recs, CatRecGroup{cat, novels}) }
-	}
-	return recs
-}
-
-func buildLatestList(ctx context.Context, novels []models.Novel) []map[string]interface{} {
-	if len(novels) == 0 { return nil }
-	ids := make([]string, len(novels))
-	for i, n := range novels { ids[i] = n.ID }
-	rows, _ := database.Pool.Query(ctx, `SELECT c.novel_id,c.id,c.title FROM chapters c INNER JOIN (SELECT novel_id,MAX(sort_order) m FROM chapters WHERE novel_id=ANY($1) GROUP BY novel_id) l ON c.novel_id=l.novel_id AND c.sort_order=l.m`, ids)
-	type ci struct{ NID,ID,Title string }
-	chMap := map[string]ci{}
-	if rows != nil {
-		for rows.Next() { var x ci; rows.Scan(&x.NID,&x.ID,&x.Title); chMap[x.NID]=x }
-		rows.Close()
-	}
-	items := make([]map[string]interface{}, 0, len(novels))
-	for _, n := range novels {
-		catName := ""
-		r2, _ := database.Pool.Query(ctx, "SELECT c.name FROM categories c JOIN novel_categories nc ON nc.category_id=c.id WHERE nc.novel_id=$1 LIMIT 1", n.ID)
-		if r2 != nil && r2.Next() { r2.Scan(&catName); r2.Close() }
-		ch := chMap[n.ID]
-		items = append(items, map[string]interface{}{
-			"Novel":n,"CategoryName":catName,"LatestChapter":ch.Title,"LatestChapterID":ch.ID,
-			"UpdatedMMDD":n.UpdatedAt.Format("01-02"),
-		})
-	}
-	return items
-}
-
+// ── Helpers ─────────────────────────────────────────────────────────────
 func (r *Router) render(w http.ResponseWriter, name string, data map[string]interface{}) {
 	if r.templates == nil { http.Error(w, "Template error", http.StatusInternalServerError); return }
-	siteName := "归来小说CMS"
-	if s, ok := data["Site"]; ok && s != nil {
-		if site, ok2 := s.(*models.Site); ok2 && site.Name != "" { siteName = site.Name }
-	}
-	data["SiteName"] = siteName; data["Lang"] = "zh"
+	data["SiteName"]="归来小说CMS"; data["Lang"]="zh"
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	r.templates.ExecuteTemplate(w, name, data)
 }
-
 func safeSlice(s []models.Novel, n int) []models.Novel { if len(s)<=n{return s}; return s[:n] }
-func pagesFromTotal(total int64, size int) int { if total==0{return 0}; p:=int(total)/size; if int(total)%size>0{p++}; return p }
+func pagesFrom(total int64, size int) int {
+	if total==0{return 0}; p:=int(total)/size; if int(total)%size>0{p++}; return p
+}
