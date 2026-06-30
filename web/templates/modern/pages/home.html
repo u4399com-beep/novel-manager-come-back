@@ -14,12 +14,7 @@
     <nav class="topnav">
       <a href="/" class="on">首页</a>
       <a href="/novels">书库</a>
-      <div class="dropdown">
-        <a href="#">分类 ▾</a>
-        <div class="dropdown-menu">
-          {{range .Categories}}<a href="/novels?category={{.ID}}">{{.Name}}</a>{{end}}
-        </div>
-      </div>
+      {{range .Categories}}{{if lt .ID 7}}<a href="/novels?category={{.ID}}">{{.Name}}</a>{{end}}{{end}}
       <a href="/search">搜索</a>
     </nav>
     <form action="/search" method="GET" class="search-inline">
