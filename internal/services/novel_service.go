@@ -227,8 +227,9 @@ func SaveCoverImage(cfg *config.Config, fileContent []byte, filename string) (st
 	}
 	storedName := models.NewUUID()[:12] + ext
 	filePath := filepath.Join(coversDir, storedName)
+	absCoversDir, _ := filepath.Abs(coversDir)
 	absPath, _ := filepath.Abs(filePath)
-	if !strings.HasPrefix(absPath, filepath.Clean(coversDir)) {
+	if !strings.HasPrefix(absPath, absCoversDir) {
 		return "", fmt.Errorf("invalid path")
 	}
 	if err := os.WriteFile(absPath, fileContent, 0644); err != nil {

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/u4399com-beep/novel-manager-come-back/internal/config"
+	"github.com/u4399com-beep/novel-manager-come-back/internal/database"
 	"github.com/u4399com-beep/novel-manager-come-back/internal/services"
 )
 
@@ -53,6 +54,12 @@ func AuthRequired(cfg *config.Config) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Verify user is still active
+			var isActive bool
+			if err := database.Pool.QueryRow(r.Context(), "SELECT is_active FROM users WHERE id=$1", userID).Scan(&isActive); err != nil || !isActive {
+				http.Error(w, `{"error":"user deactivated"}`, http.StatusForbidden)
+				return
+			}
 			ctx := context.WithValue(r.Context(), UserIDKey, userID)
 			ctx = context.WithValue(ctx, UserRoleKey, role)
 			next.ServeHTTP(w, r.WithContext(ctx))

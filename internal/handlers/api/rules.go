@@ -110,6 +110,7 @@ func (r *Router) handleRuleImport(w http.ResponseWriter, req *http.Request) {
 		if err := json.Unmarshal(data, &body); err != nil { writeError(w, 400, "invalid JSON in file"); return }
 		sourceName, _ := body["source_name"].(string)
 		if sourceName == "" { sourceName = strings.TrimSuffix(header.Filename, ".json") }
+		if strings.Contains(sourceName, "..") || strings.Contains(sourceName, "/") || strings.Contains(sourceName, "\\") { writeError(w, 400, "invalid source_name"); return }
 		savePath := filepath.Join(rulesDir, sourceName+".json")
 		formatted, _ := json.MarshalIndent(body, "", "  ")
 		os.WriteFile(savePath, formatted, 0644)
@@ -122,6 +123,7 @@ func (r *Router) handleRuleImport(w http.ResponseWriter, req *http.Request) {
 	if err := json.NewDecoder(req.Body).Decode(&body); err != nil { writeError(w, 400, "invalid JSON"); return }
 	sourceName, _ := body["source_name"].(string)
 	if sourceName == "" { writeError(w, 400, "source_name required"); return }
+	if strings.Contains(sourceName, "..") || strings.Contains(sourceName, "/") || strings.Contains(sourceName, "\\") { writeError(w, 400, "invalid source_name"); return }
 	savePath := filepath.Join(rulesDir, sourceName+".json")
 	formatted, _ := json.MarshalIndent(body, "", "  ")
 	os.WriteFile(savePath, formatted, 0644)

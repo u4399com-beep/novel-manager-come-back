@@ -58,9 +58,10 @@ func RegisterUser(ctx context.Context, username, email, password string) (*model
 	if len(password) < 8 {
 		return nil, ErrPasswordTooShort
 	}
-	hashed, _ := HashPassword(password)
+	hashed, err := HashPassword(password)
+	if err != nil { return nil, fmt.Errorf("hash password: %w", err) }
 	u := &models.User{}
-	err := database.Pool.QueryRow(ctx,
+	err = database.Pool.QueryRow(ctx,
 		"INSERT INTO users (username, email, hashed_password) VALUES ($1,$2,$3) ON CONFLICT (username) DO NOTHING RETURNING id, username, email, role, is_active, created_at, updated_at",
 		username, email, hashed,
 	).Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.IsActive, &u.CreatedAt, &u.UpdatedAt)
