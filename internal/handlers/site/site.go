@@ -139,7 +139,7 @@ func buildLatest(ctx context.Context, novels []models.Novel) []map[string]interf
 func (r *Router) bookLibrary(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	page, _ := strconv.Atoi(req.URL.Query().Get("page"))
-	if page < 1 { page = 1 }; size := 30
+	if page < 1 { page = 1 }; size := 48
 	params := services.NovelListParams{Page:page, Size:size, SortBy:"updated_at", SortDir:"desc"}
 	if c := req.URL.Query().Get("category"); c != "" { id, _ := strconv.Atoi(c); params.CategoryID = &id }
 	if s := req.URL.Query().Get("status"); s != "" { params.Status = s }
