@@ -49,7 +49,7 @@ a:hover{color:var(--link)}
 .cat-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid var(--c4)}
 .cat-head h2{font-size:18px;font-weight:700}
 .cat-more{font-size:13px;color:var(--link);font-weight:500}
-.cat-books{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.cat-books{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:16px}
 .book-card{display:block;transition:transform .15s}
 .book-card:hover{transform:translateY(-2px)}
 .book-cover{aspect-ratio:3/4;border-radius:6px;overflow:hidden;background:var(--c4);margin-bottom:8px}
@@ -77,7 +77,7 @@ a:hover{color:var(--link)}
 .tag-cloud a:hover{color:var(--link);border-color:var(--link)}
 
 /* Library Grid List */
-.lib-grid{list-style:none;display:grid;grid-template-columns:repeat(4,1fr);gap:3px 16px;padding:0;margin-top:20px}
+.lib-grid{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:3px 16px;padding:0;margin-top:20px}
 .lib-grid li{display:flex;align-items:baseline;gap:8px;padding:8px 0;border-bottom:1px solid var(--c5);font-size:13px}
 .lib-grid li a{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .lib-grid li a:hover{color:var(--link)}
