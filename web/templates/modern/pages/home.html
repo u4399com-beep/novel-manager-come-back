@@ -65,15 +65,20 @@
         {{if .Novels}}
         <section class="cat-block">
           <div class="cat-head"><h2>📚 书库</h2><span class="cat-more">共 {{.Total}} 本</span></div>
+          {{if .GridCards}}
           <div class="cat-books">
-            {{range .Novels}}
+            {{range .GridCards}}
             <a href="/novel/{{.ID}}" class="book-card">
               <div class="book-cover"><img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="lazy"></div>
               <div class="book-meta"><h4>{{.Title}}</h4><small>{{or .Author "佚名"}} · {{.TotalChapters}}章</small></div>
             </a>
             {{end}}
           </div>
-          {{if gt .Pages 1}}<div style="text-align:center;margin-top:20px;display:flex;gap:6px;justify-content:center">{{range seq .Pages}}<a href="?page={{.}}" class="btn" style="min-width:36px;{{if eq . $.Page}}background:var(--link);color:#fff{{end}}">{{.}}</a>{{end}}</div>{{end}}
+          {{end}}
+          {{if .LibraryList}}
+          <ol class="lib-list">{{range .LibraryList}}<li><span class="lib-num">{{.TotalChapters}}章</span><a href="/novel/{{.ID}}">{{.Title}}</a><span class="lib-author">{{or .Author "佚名"}}</span></li>{{end}}</ol>
+          {{end}}
+          {{if gt .Pages 1}}<div class="pag-ellipsis">{{range paginate .Page .Pages}}<a href="?page={{.Page}}" class="nbtn" style="{{if .Active}}background:var(--link);color:#fff{{end}}">{{.Label}}</a>{{end}}</div>{{end}}
         </section>
         {{end}}
         {{if .CatRecs}}

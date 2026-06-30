@@ -2,6 +2,7 @@ package site
 
 import (
 	"context"
+	"fmt"
 	"html/template"
 	"log"
 	"os"
@@ -46,6 +47,7 @@ func NewRouter(cfg *config.Config) *Router {
 			return map[string]string{"ongoing":"连载中","completed":"已完结","hiatus":"暂停更新"}[s]
 		},
 		"stripHTML": stripHTMLFn,
+		"paginate": paginateFn,
 		"splitParagraphs": func(s string) []string {
 			parts := strings.Split(s, "\n"); result := make([]string, 0, len(parts))
 			for _, p := range parts { if p = strings.TrimSpace(p); p != "" { result = append(result, p) } }
@@ -143,10 +145,11 @@ func (r *Router) bookLibrary(w http.ResponseWriter, req *http.Request) {
 	if s := req.URL.Query().Get("status"); s != "" { params.Status = s }
 	result, _ := services.ListNovels(ctx, params)
 	cats := mustCategories(ctx)
+	gridCards, libList := splitNovels(result.Items, 6)
 	r.render(w, "home.html", map[string]interface{}{
-		"Title":"归来小说CMS - 书库","Novels":result.Items,"Categories":cats,
+		"Title":"归来小说CMS - 书库","GridCards":gridCards,"LibraryList":libList,"Categories":cats,
 		"Page":page,"Total":result.Total,"Pages":pagesFrom(result.Total, size),
-		"Featured":safeSlice(result.Items,5),"Ranking":safeSlice(result.Items,15),
+		"CategoryID":params.CategoryID,"Novels":result.Items,
 	})
 }
 
@@ -229,6 +232,29 @@ func (r *Router) render(w http.ResponseWriter, name string, data map[string]inte
 	r.templates.ExecuteTemplate(w, name, data)
 }
 func safeSlice(s []models.Novel, n int) []models.Novel { if len(s)<=n{return s}; return s[:n] }
+type pageItem struct{ Page int; Label string; Active bool }
+
+func paginateFn(current, total int) []pageItem {
+	if total <= 9 {
+		items := make([]pageItem, total)
+		for i := 0; i < total; i++ { items[i] = pageItem{i+1, fmt.Sprintf("%d", i+1), i+1 == current} }
+		return items
+	}
+	items := []pageItem{{1, "1", current == 1}}
+	if current > 3 { items = append(items, pageItem{0, "...", false}) }
+	start := max(2, current-1); end := min(total-1, current+1)
+	if current <= 3 { start = 2; end = 4 }
+	if current >= total-2 { start = total-3; end = total-1 }
+	for i := start; i <= end; i++ { items = append(items, pageItem{i, fmt.Sprintf("%d", i), i == current}) }
+	if current < total-2 { items = append(items, pageItem{0, "...", false}) }
+	items = append(items, pageItem{total, fmt.Sprintf("%d", total), current == total})
+	return items
+}
+
+func splitNovels(novels []models.Novel, n int) ([]models.Novel, []models.Novel) {
+	if len(novels) <= n { return novels, nil }
+	return novels[:n], novels[n:]
+}
 func pagesFrom(total int64, size int) int {
 	if total==0{return 0}; p:=int(total)/size; if int(total)%size>0{p++}; return p
 }

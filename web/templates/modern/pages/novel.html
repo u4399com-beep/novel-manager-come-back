@@ -1,8 +1,7 @@
 {{define "novel.html"}}<!DOCTYPE html>
 <html lang="{{.Lang}}">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{.Title}}</title>
 <meta name="description" content="{{stripHTML .Novel.Description}}">
 <link rel="stylesheet" href="/static/css/modern.css">
@@ -15,45 +14,54 @@
   </div>
 </header>
 
-<main class="container novel-detail">
-  <nav class="breadcrumb">
-    <a href="/">首页</a>
-    <span>›</span>
-    <span>{{.Novel.Title}}</span>
-  </nav>
-  <div class="novel-header">
-    <img src="{{or .Novel.CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Novel.Title}}" class="novel-cover">
-    <div class="novel-meta-info">
-      <h1>{{.Novel.Title}}</h1>
-      <p class="author">作者: {{.Novel.Author}}</p>
-      <div class="tags">
-        {{range .Novel.Categories}}<span class="tag">{{.Name}}</span>{{end}}
-      </div>
-      <p class="status">状态: {{statusLabel .Novel.Status}} | 共 {{.Novel.TotalChapters}} 章</p>
-      <div class="actions">
-        <a href="/novel/{{.Novel.ID}}/chapters" class="btn primary">开始阅读</a>
+<main>
+  <!-- Novel Hero Banner -->
+  <section class="novel-hero">
+    <div class="wrap">
+      <div class="novel-hero-inner">
+        <img src="{{or .Novel.CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Novel.Title}}" class="nhero-cover">
+        <div class="nhero-info">
+          <h1>{{.Novel.Title}}</h1>
+          <div class="nhero-meta">
+            <span>{{or .Novel.Author "佚名"}}</span><span class="dot-sep">·</span>
+            <span>{{.Novel.TotalChapters}}章</span><span class="dot-sep">·</span>
+            <span class="nhero-status {{.Novel.Status}}">{{statusLabel .Novel.Status}}</span>
+          </div>
+          {{if .Novel.Categories}}<div class="nhero-tags">{{range .Novel.Categories}}<span class="ntag">{{.Name}}</span>{{end}}</div>{{end}}
+          <div class="nhero-actions">
+            <a href="/novel/{{.Novel.ID}}/chapters" class="nbtn primary">📖 开始阅读</a>
+            <a href="/novel/{{.Novel.ID}}/chapters" class="nbtn">📋 章节目录</a>
+          </div>
+        </div>
       </div>
     </div>
+  </section>
+
+  <div class="wrap">
+    <div class="novel-detail-grid">
+      <div class="ndetail-main">
+        <div class="ndesc-block">
+          <h3>📝 作品简介</h3>
+          <p>{{stripHTML .Novel.Description}}</p>
+        </div>
+        {{if .Chapters}}
+        <div class="nchapters-block">
+          <h3>📑 最新章节 <a href="/novel/{{.Novel.ID}}/chapters" class="more-link">查看全部 →</a></h3>
+          <ol class="nch-grid">{{range .Chapters}}<li><a href="/chapter/{{.ID}}">{{.Title}}</a></li>{{end}}</ol>
+        </div>
+        {{end}}
+      </div>
+      <aside class="ndetail-side">
+        <div class="ninfo-box">
+          <h3>📖 书籍信息</h3>
+          <dl><dt>作者</dt><dd>{{or .Novel.Author "佚名"}}</dd><dt>状态</dt><dd><span class="nhero-status {{.Novel.Status}}">{{statusLabel .Novel.Status}}</span></dd><dt>章节</dt><dd>{{.Novel.TotalChapters}} 章</dd><dt>来源</dt><dd>{{or .Novel.SourceName "-"}}</dd></dl>
+        </div>
+        {{if .Categories}}<div class="ninfo-box"><h3>🏷️ 分类</h3><div class="ntag-list">{{range .Categories}}<a href="/novels?category={{.ID}}">{{.Name}}</a>{{end}}</div></div>{{end}}
+      </aside>
+    </div>
   </div>
-
-  <section class="novel-description">
-    <h2>简介</h2>
-    <p>{{stripHTML .Novel.Description}}</p>
-  </section>
-
-  <section class="recent-chapters">
-    <h2>最新章节</h2>
-    <ol class="recent-chapter-grid">
-      {{range .Chapters}}
-      <li><a href="/chapter/{{.ID}}">{{.Title}}</a></li>
-      {{end}}
-    </ol>
-    <a href="/novel/{{.Novel.ID}}/chapters" class="btn">查看全部章节</a>
-  </section>
 </main>
 
-<footer class="site-footer">
-  <div class="wrap"><p>&copy; 2026 归来小说CMS</p></div>
-</footer>
+<footer class="site-foot"><div class="wrap"><p class="copy">© 2026 归来小说CMS</p></div></footer>
 </body>
 </html>{{end}}
