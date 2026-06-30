@@ -150,7 +150,7 @@ func (r *Router) bookLibrary(w http.ResponseWriter, req *http.Request) {
 	rankParams := services.NovelListParams{Page:1, Size:10, SortBy:"total_chapters", SortDir:"desc"}
 	if params.CategoryID != nil { rankParams.CategoryID = params.CategoryID }
 	catRanking, _ := services.ListNovels(ctx, rankParams)
-	r.render(w, "library.html", map[string]interface{}{
+	r.render(w, "home.html", map[string]interface{}{
 		"Title":"归来小说CMS - 书库","GridCards":gridCards,"LibraryList":libList,"Categories":cats,
 		"Page":page,"Total":result.Total,"Pages":pagesFrom(result.Total, size),
 		"CategoryID":params.CategoryID,"Novels":result.Items,"CatRanking":catRanking.Items,
