@@ -76,7 +76,7 @@
           </div>
           {{end}}
           {{if .LibraryList}}
-          <ol class="lib-list">{{range .LibraryList}}<li><span class="lib-num">{{.TotalChapters}}章</span><a href="/novel/{{.ID}}">{{.Title}}</a><span class="lib-author">{{or .Author "佚名"}}</span></li>{{end}}</ol>
+          <ol class="lib-grid">{{range .LibraryList}}<li><a href="/novel/{{.ID}}">{{.Title}}</a><span>{{or .Author "佚名"}} · {{.TotalChapters}}章</span></li>{{end}}</ol>
           {{end}}
           {{if gt .Pages 1}}<div class="pag-ellipsis">{{range paginate .Page .Pages}}<a href="?page={{.Page}}" class="nbtn" style="{{if .Active}}background:var(--link);color:#fff{{end}}">{{.Label}}</a>{{end}}</div>{{end}}
         </section>

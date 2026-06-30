@@ -145,7 +145,7 @@ func (r *Router) bookLibrary(w http.ResponseWriter, req *http.Request) {
 	if s := req.URL.Query().Get("status"); s != "" { params.Status = s }
 	result, _ := services.ListNovels(ctx, params)
 	cats := mustCategories(ctx)
-	gridCards, libList := splitNovels(result.Items, 6)
+	gridCards, libList := splitNovels(result.Items, 8)
 	r.render(w, "home.html", map[string]interface{}{
 		"Title":"归来小说CMS - 书库","GridCards":gridCards,"LibraryList":libList,"Categories":cats,
 		"Page":page,"Total":result.Total,"Pages":pagesFrom(result.Total, size),
