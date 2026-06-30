@@ -196,11 +196,11 @@ a:hover{color:var(--primary)}
 .tb-hint{font-size:11px;color:var(--text-light);white-space:nowrap}
 @media(max-width:600px){.toolbar-inner{gap:0;padding:4px 8px}.tb-btn{padding:4px 7px;font-size:11px}.tb-select{font-size:11px;padding:3px 5px}.tb-hint{display:none}}
 
-/* Breadcrumb */
-.breadcrumb{display:flex;align-items:center;gap:8px;padding:16px 0 8px;font-size:13px;color:var(--text-light)}
+/* Breadcrumb — sticky below navbar */
+.breadcrumb{position:sticky;top:60px;z-index:49;display:flex;align-items:center;gap:8px;padding:10px 0;font-size:13px;color:var(--text-light);background:var(--bg);border-bottom:1px solid var(--border);margin-bottom:16px}
 .breadcrumb a{color:var(--text-secondary)}.breadcrumb a:hover{color:var(--primary)}
 .breadcrumb span:last-child{color:var(--text);font-weight:500}
-.theme-dark .breadcrumb{color:#666}.theme-dark .breadcrumb a{color:#888}.theme-dark .breadcrumb span:last-child{color:#bbb}
+.theme-dark .breadcrumb{background:#1e1e32;border-color:#333;color:#666}.theme-dark .breadcrumb a{color:#888}.theme-dark .breadcrumb span:last-child{color:#bbb}
 
 /* Chapter Reader */
 .chapter-reader{max-width:780px;margin: 0 auto 40px;background:var(--card-bg);padding:0 50px 40px;border-radius:0 0 var(--radius) var(--radius);box-shadow:none;border:1px solid var(--border);border-top:none}
