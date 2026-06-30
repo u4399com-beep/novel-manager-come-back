@@ -141,3 +141,6 @@ a:hover{color:var(--link)}
   .cat-books{grid-template-columns:repeat(2,1fr)}
   .chapter-reader{padding:16px}
 }
+
+/* Sticky breadcrumb below navbar */
+.breadcrumb{position:sticky;top:56px;z-index:49;background:#fff;border-bottom:1px solid var(--c4);margin-bottom:0;padding:10px 0}
