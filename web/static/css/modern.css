@@ -143,4 +143,8 @@ a:hover{color:var(--link)}
 }
 
 /* Sticky breadcrumb below navbar */
-.breadcrumb{position:sticky;top:56px;z-index:49;background:#fff;border-bottom:1px solid var(--c4);margin-bottom:0;padding:10px 0}
+.breadcrumb{position:sticky;top:56px;z-index:49;background:#fff;border-bottom:1px solid var(--c4);margin-bottom:0;padding:8px 0}
+
+/* Sticky toolbar below breadcrumb — all 3 form a single unit */
+.reader-toolbar{position:sticky;top:90px;z-index:48}
+.toolbar-inner{max-width:780px;margin:0 auto}
