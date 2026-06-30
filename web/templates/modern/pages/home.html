@@ -1,0 +1,162 @@
+{{define "home.html"}}<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{.Title}}</title>
+<meta name="description" content="归来小说CMS - 海量小说免费阅读">
+<link rel="stylesheet" href="/static/css/modern.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a href="/" class="brand">{{.SiteName}}</a>
+    <nav class="topnav">
+      <a href="/" class="on">首页</a>
+      <a href="/novels">书库</a>
+      <div class="dropdown">
+        <a href="#">分类 ▾</a>
+        <div class="dropdown-menu">
+          {{range .Categories}}<a href="/novels?category={{.ID}}">{{.Name}}</a>{{end}}
+        </div>
+      </div>
+      <a href="/search">搜索</a>
+    </nav>
+    <form action="/search" method="GET" class="search-inline">
+      <input type="text" name="q" placeholder="搜书名..." required>
+    </form>
+  </div>
+</header>
+
+<main>
+  <!-- Featured Banner -->
+  {{if .Featured}}
+  <section class="featured-strip">
+    <div class="wrap">
+      {{range $i, $n := .Featured}}
+      {{if lt $i 1}}
+      <a href="/novel/{{.ID}}" class="featured-card">
+        <div class="featured-img">
+          <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}">
+        </div>
+        <div class="featured-text">
+          <span class="badge">主编推荐</span>
+          <h1>{{.Title}}</h1>
+          <p class="by">{{or .Author "佚名"}} · {{.TotalChapters}}章 · {{statusLabel .Status}}</p>
+          <p class="excerpt">{{truncate (stripHTML .Description) 120}}</p>
+        </div>
+      </a>
+      {{end}}
+      {{end}}
+      <div class="featured-list">
+        {{range $i, $n := .Featured}}
+        {{if gt $i 0}}
+        <a href="/novel/{{.ID}}" class="featured-mini">
+          <span class="dot {{if lt $i 3}}hot{{end}}">{{add $i 1}}</span>
+          <span class="ftitle">{{.Title}}</span>
+          <span class="fmeta">{{.TotalChapters}}章</span>
+        </a>
+        {{end}}
+        {{end}}
+      </div>
+    </div>
+  </section>
+  {{end}}
+
+  <div class="wrap">
+    <div class="main-grid">
+      <!-- Left: Category Sections -->
+      <div class="content-area">
+        {{if .CatRecs}}
+        {{range .CatRecs}}
+        <section class="cat-block">
+          <div class="cat-head">
+            <h2>{{.Category.Name}}</h2>
+            <a href="/novels?category={{.Category.ID}}" class="cat-more">全部 →</a>
+          </div>
+          <div class="cat-books">
+            {{range .Novels}}
+            <a href="/novel/{{.ID}}" class="book-card">
+              <div class="book-cover">
+                <img src="{{or .CoverImageURL "/static/covers/default.jpg"}}" alt="{{.Title}}" loading="lazy">
+              </div>
+              <div class="book-meta">
+                <h4>{{.Title}}</h4>
+                <small>{{or .Author "佚名"}} · {{statusLabel .Status}}</small>
+              </div>
+            </a>
+            {{end}}
+          </div>
+        </section>
+        {{end}}
+        {{end}}
+      </div>
+
+      <!-- Right: Sidebar -->
+      <aside class="sidebar-area">
+        {{if .Ranking}}
+        <div class="side-box">
+          <h3>🏆 本周热门</h3>
+          <ol class="hotlist">
+            {{range $i, $n := .Ranking}}
+            <li><span class="rank {{if lt $i 3}}top{{$i}}{{end}}">{{add $i 1}}</span><a href="/novel/{{.ID}}">{{.Title}}</a></li>
+            {{end}}
+          </ol>
+        </div>
+        {{end}}
+
+        <div class="side-box">
+          <h3>📊 站点统计</h3>
+          <div class="stats-row">
+            <div class="stat"><strong>{{.Total}}</strong><span>本小说</span></div>
+          </div>
+        </div>
+
+        {{if .Categories}}
+        <div class="side-box">
+          <h3>📂 分类</h3>
+          <div class="tag-cloud">
+            {{range .Categories}}<a href="/novels?category={{.ID}}">{{.Name}}</a>{{end}}
+          </div>
+        </div>
+        {{end}}
+      </aside>
+    </div>
+
+    <!-- Latest Updates Table -->
+    {{if .LatestList}}
+    <section class="latest-section">
+      <h2>📡 最近更新</h2>
+      <div class="latest-table-wrap">
+        <table class="ltable">
+          <thead><tr><th>分类</th><th>书名</th><th>最新章节</th><th>作者</th><th>更新</th></tr></thead>
+          <tbody>
+            {{range .LatestList}}
+            <tr>
+              <td class="lcat">{{or .CategoryName "-"}}</td>
+              <td class="ltitle"><a href="/novel/{{.Novel.ID}}">{{.Novel.Title}}</a></td>
+              <td class="lch">{{if .LatestChapterID}}<a href="/chapter/{{.LatestChapterID}}">{{.LatestChapter}}</a>{{else}}-{{end}}</td>
+              <td class="lauthor">{{or .Novel.Author "-"}}</td>
+              <td class="ldate">{{.UpdatedMMDD}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {{end}}
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div><strong>{{.SiteName}}</strong><p>海量小说免费在线阅读</p></div>
+      <div><a href="/">首页</a><a href="/novels">书库</a><a href="/search">搜索</a></div>
+      <div>{{range .Categories}}{{if lt .ID 7}}<a href="/novels?category={{.ID}}">{{.Name}}</a>{{end}}{{end}}</div>
+    </div>
+    <p class="copy">© 2026 归来小说CMS</p>
+  </div>
+</footer>
+</body>
+</html>{{end}}

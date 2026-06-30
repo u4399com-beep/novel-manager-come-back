@@ -4,6 +4,7 @@ import (
 	"context"
 	"html/template"
 	"log"
+	"os"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -31,7 +32,7 @@ func stripHTMLFn(s string) string {
 
 func NewRouter(cfg *config.Config) *Router {
 	r := &Router{cfg: cfg}
-	tplDir := filepath.Join("web", "templates", "default")
+	tplName := "default"; if v := os.Getenv("TEMPLATE"); v != "" { tplName = strings.TrimSpace(strings.ToLower(v)) }; tplDir := filepath.Join("web", "templates", tplName)
 	pattern := filepath.Join(tplDir, "pages", "*.html")
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		"or": func(a, b string) string { if a != "" { return a }; return b },
